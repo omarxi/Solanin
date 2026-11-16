@@ -125,6 +125,9 @@ fn primary_button(label: &str, fill: Color32) -> egui::Button<'_> {
 
 impl ModLauncherApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        cc.egui_ctx
+            .options_mut(|o| o.theme_preference = egui::ThemePreference::Dark);
+        cc.egui_ctx.set_theme(egui::Theme::Dark);
         apply_theme(&cc.egui_ctx);
 
         let paths = LauncherPaths::resolve().expect("Failed to resolve launcher data directory");
@@ -638,8 +641,22 @@ impl ModLauncherApp {
                                     }
 
                                     ui.vertical(|ui| {
+                                        ui.add(
+                                            egui::Label::new(
+                                                RichText::new(&m.name)
+                                                    .strong()
+                                                    .size(14.0)
+                                                    .color(TEXT_PRIMARY),
+                                            )
+                                            .wrap(),
+                                        );
                                         ui.horizontal(|ui| {
-                                            ui.label(RichText::new(&m.name).strong().size(14.0));
+                                            let meta = if m.author.is_empty() {
+                                                format!("v{}", m.version)
+                                            } else {
+                                                format!("v{}  ·  {}", m.version, m.author)
+                                            };
+                                            ui.label(RichText::new(meta).small().color(TEXT_MUTED));
                                             ui.with_layout(
                                                 egui::Layout::right_to_left(egui::Align::Center),
                                                 |ui| match installed {
@@ -668,12 +685,6 @@ impl ModLauncherApp {
                                                 },
                                             );
                                         });
-                                        let meta = if m.author.is_empty() {
-                                            format!("v{}", m.version)
-                                        } else {
-                                            format!("v{}  ·  {}", m.version, m.author)
-                                        };
-                                        ui.label(RichText::new(meta).small().color(TEXT_MUTED));
                                     });
                                 });
                             })
@@ -1087,6 +1098,13 @@ impl eframe::App for ModLauncherApp {
             egui::Window::new(format!("{name} Installed"))
                 .collapsible(false)
                 .resizable(false)
+                .frame(
+                    egui::Frame::window(&ctx.style())
+                        .fill(BG_PANEL)
+                        .stroke(Stroke::new(1.0_f32, BORDER_SUBTLE))
+                        .rounding(Rounding::same(10.0))
+                        .inner_margin(egui::Margin::same(16.0)),
+                )
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                 .show(ctx, |ui| {
                     ui.set_min_width(340.0);
