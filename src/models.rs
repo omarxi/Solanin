@@ -26,6 +26,16 @@ impl InstallTarget {
     }
 }
 
+/// Changelog entry for a plugin version.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReleaseNote {
+    pub version: String,
+    #[serde(default)]
+    pub date: String,
+    #[serde(default)]
+    pub notes: String,
+}
+
 /// Remote plugin entry in `catalog.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModEntry {
@@ -40,7 +50,13 @@ pub struct ModEntry {
     pub description: String,
     pub download_url: String,
     #[serde(default)]
+    pub icon_url: Option<String>,
+    #[serde(default)]
+    pub previews: Vec<String>,
+    #[serde(default)]
     pub image_url: Option<String>,
+    #[serde(default)]
+    pub video_url: Option<String>,
     #[serde(default)]
     pub sha256: Option<String>,
     #[serde(default)]
@@ -49,6 +65,8 @@ pub struct ModEntry {
     pub tags: Vec<String>,
     #[serde(default)]
     pub updated_at: String,
+    #[serde(default)]
+    pub changelog: Vec<ReleaseNote>,
 }
 
 /// Root structure of `catalog.json`.

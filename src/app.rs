@@ -6,9 +6,10 @@ use crate::models::{AppState, InstalledMod, ModCatalog, ModEntry, STEAM_APP_ID};
 use crate::paths::{detect_game_dir, LauncherPaths};
 use eframe::egui::{self, Color32, RichText, Rounding, Stroke};
 use std::collections::{HashMap, HashSet};
+use std::io::Cursor;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const BG_MAIN: Color32 = Color32::from_rgb(17, 19, 24);
 const BG_PANEL: Color32 = Color32::from_rgb(23, 26, 33);
@@ -37,9 +38,15 @@ enum WorkerMsg {
     },
     ImageLoaded {
         url: String,
-        result: Result<egui::ColorImage, String>,
+        result: Result<Vec<(egui::ColorImage, Duration)>, String>,
     },
     BepInExInstalled(Result<(), String>),
+}
+
+struct PreviewMedia {
+    frames: Vec<(egui::TextureHandle, Duration)>,
+    total_duration: Duration,
+    start: Instant,
 }
 
 pub struct ModLauncherApp {
@@ -55,9 +62,10 @@ pub struct ModLauncherApp {
     rx: Receiver<WorkerMsg>,
     catalog_url_input: String,
     game_dir_input: String,
-    preview_textures: HashMap<String, Option<egui::TextureHandle>>,
+    preview_textures: HashMap<String, Option<PreviewMedia>>,
     loading_images: HashSet<String>,
     bepinex_installing: bool,
+    logo_texture: Option<egui::TextureHandle>,
 }
 
 fn apply_theme(ctx: &egui::Context) {
@@ -128,6 +136,19 @@ impl ModLauncherApp {
 
         let selected_catalog_id = catalog.mods.first().map(|m| m.id.clone());
 
+        let logo_texture = image::load_from_memory(include_bytes!("../assets/icon.png"))
+            .ok()
+            .map(|img| {
+                let rgba = img.to_rgba8();
+                let size = [rgba.width() as usize, rgba.height() as usize];
+                let color_img = egui::ColorImage::from_rgba_unmultiplied(
+                    size,
+                    rgba.as_flat_samples().as_slice(),
+                );
+                cc.egui_ctx
+                    .load_texture("solanin_logo", color_img, egui::TextureOptions::LINEAR)
+            });
+
         let mut app = Self {
             paths,
             state,
@@ -144,6 +165,7 @@ impl ModLauncherApp {
             preview_textures: HashMap::new(),
             loading_images: HashSet::new(),
             bepinex_installing: false,
+            logo_texture,
         };
 
         let _ = save_state(&app.paths, &app.state);
@@ -219,6 +241,31 @@ impl ModLauncherApp {
         });
     }
 
+    fn current_texture<'a>(&'a self, url: &str, ctx: &egui::Context) -> Option<&'a egui::TextureHandle> {
+        let media = self.preview_textures.get(url)?.as_ref()?;
+        if media.frames.is_empty() {
+            return None;
+        }
+        if media.frames.len() == 1 || media.total_duration.is_zero() {
+            return Some(&media.frames[0].0);
+        }
+        let elapsed_ms =
+            (media.start.elapsed().as_millis() % media.total_duration.as_millis()) as u64;
+        let mut acc = 0u64;
+        let mut chosen = &media.frames[0].0;
+        let mut next_delay = media.frames[0].1;
+        for (t, d) in &media.frames {
+            acc += d.as_millis() as u64;
+            if elapsed_ms < acc {
+                chosen = t;
+                next_delay = *d;
+                break;
+            }
+        }
+        ctx.request_repaint_after(next_delay);
+        Some(chosen)
+    }
+
     fn trigger_fetch_image(&mut self, url: String, ctx: egui::Context) {
         if self.loading_images.contains(&url) || self.preview_textures.contains_key(&url) {
             return;
@@ -227,12 +274,12 @@ impl ModLauncherApp {
         let tx = self.tx.clone();
 
         std::thread::spawn(move || {
-            let result = (|| -> Result<egui::ColorImage, String> {
+            let result = (|| -> Result<Vec<(egui::ColorImage, Duration)>, String> {
                 let bytes = if let Some(local) = url.strip_prefix("file://") {
                     std::fs::read(local).map_err(|e| e.to_string())?
                 } else {
                     let client = reqwest::blocking::Client::builder()
-                        .timeout(Duration::from_secs(15))
+                        .timeout(Duration::from_secs(20))
                         .user_agent("Solanin/0.1")
                         .build()
                         .map_err(|e| e.to_string())?;
@@ -242,13 +289,37 @@ impl ModLauncherApp {
                     }
                     resp.bytes().map_err(|e| e.to_string())?.to_vec()
                 };
-                let img = image::load_from_memory(&bytes).map_err(|e| e.to_string())?;
-                let rgba = img.to_rgba8();
-                let size = [rgba.width() as usize, rgba.height() as usize];
-                Ok(egui::ColorImage::from_rgba_unmultiplied(
-                    size,
-                    rgba.as_flat_samples().as_slice(),
-                ))
+
+                if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+                    use image::AnimationDecoder;
+                    let decoder = image::codecs::gif::GifDecoder::new(Cursor::new(&bytes))
+                        .map_err(|e| e.to_string())?;
+                    let mut out = Vec::new();
+                    for frame in decoder.into_frames().flatten() {
+                        let (num, den) = frame.delay().numer_denom_ms();
+                        let ms = if den == 0 { 100 } else { (num / den).max(20) };
+                        let rgba = frame.into_buffer();
+                        let size = [rgba.width() as usize, rgba.height() as usize];
+                        let color_img = egui::ColorImage::from_rgba_unmultiplied(
+                            size,
+                            rgba.as_flat_samples().as_slice(),
+                        );
+                        out.push((color_img, Duration::from_millis(ms as u64)));
+                    }
+                    if out.is_empty() {
+                        return Err("Empty GIF".to_string());
+                    }
+                    Ok(out)
+                } else {
+                    let img = image::load_from_memory(&bytes).map_err(|e| e.to_string())?;
+                    let rgba = img.to_rgba8();
+                    let size = [rgba.width() as usize, rgba.height() as usize];
+                    let color_img = egui::ColorImage::from_rgba_unmultiplied(
+                        size,
+                        rgba.as_flat_samples().as_slice(),
+                    );
+                    Ok(vec![(color_img, Duration::ZERO)])
+                }
             })();
 
             let _ = tx.send(WorkerMsg::ImageLoaded { url, result });
@@ -288,10 +359,25 @@ impl ModLauncherApp {
                 }
                 WorkerMsg::ImageLoaded { url, result } => {
                     self.loading_images.remove(&url);
-                    let tex = result.ok().map(|color_img| {
-                        ctx.load_texture(&url, color_img, egui::TextureOptions::LINEAR)
+                    let media = result.ok().map(|raw_frames| {
+                        let mut total = Duration::ZERO;
+                        let frames = raw_frames
+                            .into_iter()
+                            .enumerate()
+                            .map(|(idx, (img, delay))| {
+                                total += delay;
+                                let name = format!("{url}#{idx}");
+                                let tex = ctx.load_texture(name, img, egui::TextureOptions::LINEAR);
+                                (tex, delay)
+                            })
+                            .collect();
+                        PreviewMedia {
+                            frames,
+                            total_duration: total,
+                            start: Instant::now(),
+                        }
                     });
-                    self.preview_textures.insert(url, tex);
+                    self.preview_textures.insert(url, media);
                 }
                 WorkerMsg::BepInExInstalled(result) => {
                     self.bepinex_installing = false;
@@ -354,6 +440,13 @@ impl ModLauncherApp {
             )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
+                    if let Some(ref logo) = self.logo_texture {
+                        ui.add(
+                            egui::Image::new(logo)
+                                .fit_to_exact_size(egui::vec2(24.0, 24.0))
+                                .rounding(Rounding::same(5.0)),
+                        );
+                    }
                     ui.label(RichText::new("Solanin").size(18.0).strong());
                     ui.label(RichText::new("Ages of Conflict").size(13.0).color(TEXT_MUTED));
                     ui.add_space(14.0);
@@ -486,47 +579,92 @@ impl ModLauncherApp {
 
                     for m in &filtered {
                         let selected = self.selected_catalog_id.as_deref() == Some(&m.id);
+                        let is_img_or_gif = |s: &&str| {
+                            let ext = s.split('?').next().unwrap_or("").to_lowercase();
+                            !ext.ends_with(".mp4")
+                                && !ext.ends_with(".webm")
+                                && !s.contains("youtube.com")
+                                && !s.contains("youtu.be")
+                        };
+                        let thumb_url = m
+                            .icon_url
+                            .as_deref()
+                            .map(str::trim)
+                            .filter(|s| !s.is_empty())
+                            .or_else(|| {
+                                m.image_url
+                                    .as_deref()
+                                    .map(str::trim)
+                                    .filter(|s| !s.is_empty())
+                            })
+                            .or_else(|| {
+                                m.previews
+                                    .iter()
+                                    .map(|s| s.trim())
+                                    .find(|s| !s.is_empty() && is_img_or_gif(s))
+                            });
+                        if let Some(u) = thumb_url {
+                            if !self.preview_textures.contains_key(u)
+                                && !self.loading_images.contains(u)
+                            {
+                                self.trigger_fetch_image(u.to_string(), ctx.clone());
+                            }
+                        }
                         let installed = self.state.installed.get(&m.id);
 
                         let resp = card_frame(selected)
                             .show(ui, |ui| {
                                 ui.set_width(ui.available_width());
                                 ui.horizontal(|ui| {
-                                    ui.label(RichText::new(&m.name).strong().size(14.0));
-                                    ui.with_layout(
-                                        egui::Layout::right_to_left(egui::Align::Center),
-                                        |ui| match installed {
-                                            Some(inst) if inst.version != m.version => {
-                                                ui.label(
-                                                    RichText::new("Update")
-                                                        .small()
-                                                        .color(ACCENT_AMBER),
-                                                );
-                                            }
-                                            Some(inst) if inst.enabled => {
-                                                ui.label(
-                                                    RichText::new("Enabled")
-                                                        .small()
-                                                        .color(ACCENT_GREEN),
-                                                );
-                                            }
-                                            Some(_) => {
-                                                ui.label(
-                                                    RichText::new("Disabled")
-                                                        .small()
-                                                        .color(TEXT_MUTED),
-                                                );
-                                            }
-                                            None => {}
-                                        },
-                                    );
+                                    if let Some(u) = thumb_url {
+                                        if let Some(tex) = self.current_texture(u, ctx) {
+                                            ui.add(
+                                                egui::Image::new(tex)
+                                                    .fit_to_exact_size(egui::vec2(44.0, 44.0))
+                                                    .rounding(Rounding::same(6.0)),
+                                            );
+                                        }
+                                    }
+
+                                    ui.vertical(|ui| {
+                                        ui.horizontal(|ui| {
+                                            ui.label(RichText::new(&m.name).strong().size(14.0));
+                                            ui.with_layout(
+                                                egui::Layout::right_to_left(egui::Align::Center),
+                                                |ui| match installed {
+                                                    Some(inst) if inst.version != m.version => {
+                                                        ui.label(
+                                                            RichText::new("Update")
+                                                                .small()
+                                                                .color(ACCENT_AMBER),
+                                                        );
+                                                    }
+                                                    Some(inst) if inst.enabled => {
+                                                        ui.label(
+                                                            RichText::new("Enabled")
+                                                                .small()
+                                                                .color(ACCENT_GREEN),
+                                                        );
+                                                    }
+                                                    Some(_) => {
+                                                        ui.label(
+                                                            RichText::new("Disabled")
+                                                                .small()
+                                                                .color(TEXT_MUTED),
+                                                        );
+                                                    }
+                                                    None => {}
+                                                },
+                                            );
+                                        });
+                                        let meta = if m.author.is_empty() {
+                                            format!("v{}", m.version)
+                                        } else {
+                                            format!("v{}  ·  {}", m.version, m.author)
+                                        };
+                                        ui.label(RichText::new(meta).small().color(TEXT_MUTED));
+                                    });
                                 });
-                                let meta = if m.author.is_empty() {
-                                    format!("v{}", m.version)
-                                } else {
-                                    format!("v{}  ·  {}", m.version, m.author)
-                                };
-                                ui.label(RichText::new(meta).small().color(TEXT_MUTED));
                             })
                             .response
                             .interact(egui::Sense::click());
@@ -562,6 +700,21 @@ impl ModLauncherApp {
                 card_frame(false).show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     ui.horizontal(|ui| {
+                        if let Some(icon_u) = m.icon_url.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+                            if !self.preview_textures.contains_key(icon_u)
+                                && !self.loading_images.contains(icon_u)
+                            {
+                                self.trigger_fetch_image(icon_u.to_string(), ctx.clone());
+                            }
+                            if let Some(tex) = self.current_texture(icon_u, ctx) {
+                                ui.add(
+                                    egui::Image::new(tex)
+                                        .fit_to_exact_size(egui::vec2(48.0, 48.0))
+                                        .rounding(Rounding::same(8.0)),
+                                );
+                            }
+                        }
+
                         ui.vertical(|ui| {
                             ui.label(RichText::new(&m.name).size(22.0).strong());
                             let sub = if m.author.is_empty() {
@@ -636,27 +789,54 @@ impl ModLauncherApp {
                 ui.add_space(12.0);
 
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    if let Some(ref img_url) = m.image_url {
-                        let trimmed = img_url.trim();
-                        if !trimmed.is_empty() {
-                            if let Some(Some(tex)) = self.preview_textures.get(trimmed) {
-                                ui.add(
-                                    egui::Image::new(tex)
-                                        .max_width(ui.available_width().min(520.0))
-                                        .max_height(260.0)
-                                        .rounding(Rounding::same(8.0)),
-                                );
-                                ui.add_space(10.0);
-                            } else if self.loading_images.contains(trimmed) {
-                                ui.label(
-                                    RichText::new("Loading preview...")
-                                        .small()
-                                        .color(TEXT_MUTED),
-                                );
-                                ui.add_space(8.0);
-                            } else if !self.preview_textures.contains_key(trimmed) {
-                                self.trigger_fetch_image(trimmed.to_string(), ctx.clone());
+                    let mut all_media: Vec<String> = Vec::new();
+                    for u in m
+                        .image_url
+                        .iter()
+                        .chain(m.video_url.iter())
+                        .chain(m.previews.iter())
+                    {
+                        let trimmed = u.trim();
+                        if !trimmed.is_empty() && !all_media.iter().any(|x| x == trimmed) {
+                            all_media.push(trimmed.to_string());
+                        }
+                    }
+
+                    for trimmed in &all_media {
+                        let clean = trimmed.split('?').next().unwrap_or("").to_lowercase();
+                        let is_video_link = clean.ends_with(".mp4")
+                            || clean.ends_with(".webm")
+                            || clean.ends_with(".mov")
+                            || trimmed.contains("youtube.com")
+                            || trimmed.contains("youtu.be");
+
+                        if is_video_link {
+                            if ui.button("▶  Watch Preview Video").clicked() {
+                                if let Err(e) = open::that(trimmed) {
+                                    self.status_message = format!("Could not open video: {e}");
+                                }
                             }
+                            ui.add_space(8.0);
+                            continue;
+                        }
+
+                        if let Some(tex) = self.current_texture(trimmed, ctx) {
+                            ui.add(
+                                egui::Image::new(tex)
+                                    .max_width(ui.available_width().min(520.0))
+                                    .max_height(260.0)
+                                    .rounding(Rounding::same(8.0)),
+                            );
+                            ui.add_space(10.0);
+                        } else if self.loading_images.contains(trimmed) {
+                            ui.label(
+                                RichText::new("Loading preview...")
+                                    .small()
+                                    .color(TEXT_MUTED),
+                            );
+                            ui.add_space(8.0);
+                        } else if !self.preview_textures.contains_key(trimmed) {
+                            self.trigger_fetch_image(trimmed.to_string(), ctx.clone());
                         }
                     }
 
@@ -670,6 +850,27 @@ impl ModLauncherApp {
                         &m.description
                     };
                     ui.label(RichText::new(desc).size(14.0).color(TEXT_PRIMARY));
+
+                    if !m.changelog.is_empty() {
+                        ui.add_space(16.0);
+                        ui.label(RichText::new("What's New").size(16.0).strong());
+                        ui.add_space(6.0);
+                        for note in &m.changelog {
+                            card_frame(false).show(ui, |ui| {
+                                ui.set_width(ui.available_width());
+                                let header = if note.date.is_empty() {
+                                    format!("v{}", note.version)
+                                } else {
+                                    format!("v{}  ·  {}", note.version, note.date)
+                                };
+                                ui.label(RichText::new(header).strong().color(ACCENT_BLUE));
+                                if !note.notes.is_empty() {
+                                    ui.label(RichText::new(&note.notes).color(TEXT_PRIMARY));
+                                }
+                            });
+                            ui.add_space(4.0);
+                        }
+                    }
                 });
             });
     }
