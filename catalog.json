@@ -20,7 +20,8 @@
         "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/skeptics2.png",
         "https://youtu.be/3Et3nGdgPHU",
         "https://youtu.be/GNEBVRTZb8s"
-      ]
+      ],
+      "instructions": "open menu by clicking \".\""
     },
     {
       "id": "determinism",
@@ -38,7 +39,8 @@
       "install_target": "bepinex_plugins",
       "tags": [],
       "updated_at": "2026-11-16",
-      "changelog": []
+      "changelog": [],
+      "instructions": "open menu by clicking \".\""
     },
     {
       "id": "Contours-Of-conflict",
@@ -52,6 +54,28 @@
       "previews": [
         "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/image.png",
         "https://youtu.be/A4cYagjzVnI"
+      ],
+      "image_url": null,
+      "video_url": null,
+      "sha256": null,
+      "install_target": "bepinex_plugins",
+      "tags": [],
+      "updated_at": "2026-11-16",
+      "changelog": []
+    },
+    {
+      "id": "atharv-amc",
+      "name": "atharv's Advanced Map Customizer",
+      "version": "1.6.0",
+      "author": "atharv_asgola",
+      "summary": "map customizer",
+      "description": "",
+      "instructions": "",
+      "download_url": "https://raw.githubusercontent.com/omarxi/solanin/main/mods/atharvsAdvancedMapCustomizer.dll",
+      "icon_url": null,
+      "previews": [
+        "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/image2.png",
+        "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/image3.png"
       ],
       "image_url": null,
       "video_url": null,
