@@ -10,6 +10,13 @@
 
 ---
 
+## Preview (v1.0.0)
+> **Note:** This is **v1.0.0** — more mods are going to be added!
+
+![Browse Plugins](assets/preview-browse.webp)
+
+![Installed Plugins](assets/preview-installed.webp)
+
 ## Features
 - **Automatic BepInEx 5 Setup**: Checks for `BepInEx` on startup and automatically installs the right build for Windows or Linux (`5.4.23.6`) into your Steam game folder.
 - **Steam Auto-Detection**: Reads Steam's `libraryfolders.vdf` and `appmanifest_2186320.acf` to locate *Ages of Conflict World War Simulator* automatically.
