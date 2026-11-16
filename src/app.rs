@@ -377,9 +377,15 @@ impl ModLauncherApp {
                                 .filter(|sh| sh.exists())
                                 .and_then(|sh| {
                                     let dir = sh.parent()?.to_path_buf();
+                                    let appid_file = dir.join("steam_appid.txt");
+                                    if !appid_file.exists() {
+                                        let _ = std::fs::write(&appid_file, format!("{STEAM_APP_ID}\n"));
+                                    }
                                     std::process::Command::new("bash")
                                         .arg(&sh)
                                         .current_dir(dir)
+                                        .env("SteamAppId", STEAM_APP_ID)
+                                        .env("SteamGameId", STEAM_APP_ID)
                                         .spawn()
                                         .ok()
                                 })

@@ -257,6 +257,20 @@ pub fn install_bepinex(game_dir: &Path) -> Result<(), String> {
     std::fs::create_dir_all(&plugins_dir)
         .map_err(|e| format!("Failed to create BepInEx/plugins: {e}"))?;
 
+    // Unity 6 (6000.x) destroys BepInEx_Manager on first scene load unless HideManagerGameObject = true.
+    let config_dir = game_dir.join("BepInEx").join("config");
+    std::fs::create_dir_all(&config_dir)
+        .map_err(|e| format!("Failed to create BepInEx/config: {e}"))?;
+    let bepinex_cfg = config_dir.join("BepInEx.cfg");
+    if bepinex_cfg.exists() {
+        if let Ok(content) = std::fs::read_to_string(&bepinex_cfg) {
+            let updated = content.replace("HideManagerGameObject = false", "HideManagerGameObject = true");
+            let _ = std::fs::write(&bepinex_cfg, updated);
+        }
+    } else {
+        let _ = std::fs::write(&bepinex_cfg, "[Chainloader]\nHideManagerGameObject = true\n");
+    }
+
     if is_linux_native {
         let run_sh = game_dir.join("run_bepinex.sh");
         if run_sh.exists() {
