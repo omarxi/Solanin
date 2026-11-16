@@ -69,8 +69,8 @@
       "version": "1.6.0",
       "author": "atharv_asgola",
       "summary": "map customizer",
-      "description": "",
-      "instructions": "",
+      "description": "note: doesn't work on linux (for now)",
+      "instructions": "CTRL + ALT + T (doesnt work on linux)",
       "download_url": "https://raw.githubusercontent.com/omarxi/solanin/main/mods/atharvsAdvancedMapCustomizer.dll",
       "icon_url": null,
       "previews": [
