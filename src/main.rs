@@ -6,6 +6,7 @@ mod mod_manager;
 mod models;
 mod paths;
 mod shortcut;
+mod updater;
 
 use app::ModLauncherApp;
 use eframe::egui;

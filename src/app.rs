@@ -4,6 +4,7 @@ use crate::mod_manager::{
 };
 use crate::models::{AppState, InstalledMod, ModCatalog, ModEntry, STEAM_APP_ID};
 use crate::paths::{detect_game_dir, LauncherPaths};
+use crate::updater::{apply_update_and_restart, check_for_update, AppUpdateInfo};
 use eframe::egui::{self, Color32, RichText, Rounding, Stroke};
 use std::collections::{HashMap, HashSet};
 use std::io::Cursor;
@@ -41,6 +42,8 @@ enum WorkerMsg {
         result: Result<Vec<(egui::ColorImage, Duration)>, String>,
     },
     BepInExInstalled(Result<(), String>),
+    AppUpdateChecked(Option<AppUpdateInfo>),
+    AppUpdateFailed(String),
 }
 
 struct PreviewMedia {
@@ -67,6 +70,8 @@ pub struct ModLauncherApp {
     bepinex_installing: bool,
     logo_texture: Option<egui::TextureHandle>,
     install_popup: Option<(String, String)>,
+    available_update: Option<AppUpdateInfo>,
+    updating_app: bool,
 }
 
 fn apply_theme(ctx: &egui::Context) {
@@ -176,10 +181,13 @@ impl ModLauncherApp {
             bepinex_installing: false,
             logo_texture,
             install_popup: None,
+            available_update: None,
+            updating_app: false,
         };
 
         let _ = save_state(&app.paths, &app.state);
         app.trigger_fetch_catalog(cc.egui_ctx.clone());
+        app.trigger_check_app_update(cc.egui_ctx.clone());
         if let Some(ref game_dir) = app.state.config.game_dir.clone() {
             if !is_bepinex_installed(game_dir) {
                 app.trigger_install_bepinex(game_dir.clone(), cc.egui_ctx.clone());
@@ -233,6 +241,31 @@ impl ModLauncherApp {
             let result = install_mod(&entry, &paths, &config, existing.as_ref());
             let _ = tx.send(WorkerMsg::ModInstalled { id, result });
             ctx.request_repaint();
+        });
+    }
+
+    fn trigger_check_app_update(&self, ctx: egui::Context) {
+        let tx = self.tx.clone();
+        std::thread::spawn(move || {
+            if let Ok(maybe_info) = check_for_update() {
+                let _ = tx.send(WorkerMsg::AppUpdateChecked(maybe_info));
+                ctx.request_repaint();
+            }
+        });
+    }
+
+    fn trigger_apply_app_update(&mut self, info: AppUpdateInfo, ctx: egui::Context) {
+        if self.updating_app {
+            return;
+        }
+        self.updating_app = true;
+        self.status_message = format!("Downloading Solanin {}...", info.version);
+        let tx = self.tx.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = apply_update_and_restart(&info) {
+                let _ = tx.send(WorkerMsg::AppUpdateFailed(e));
+                ctx.request_repaint();
+            }
         });
     }
 
@@ -404,6 +437,13 @@ impl ModLauncherApp {
                         }
                     }
                 }
+                WorkerMsg::AppUpdateChecked(maybe_info) => {
+                    self.available_update = maybe_info;
+                }
+                WorkerMsg::AppUpdateFailed(err) => {
+                    self.updating_app = false;
+                    self.status_message = format!("Solanin update failed: {err}");
+                }
             }
         }
     }
@@ -510,6 +550,18 @@ impl ModLauncherApp {
                             .clicked()
                         {
                             self.trigger_fetch_catalog(ctx.clone());
+                        }
+                        if let Some(info) = self.available_update.clone() {
+                            let label = format!("Update {}", info.version);
+                            if ui
+                                .add_enabled(
+                                    !self.updating_app,
+                                    primary_button(&label, ACCENT_AMBER),
+                                )
+                                .clicked()
+                            {
+                                self.trigger_apply_app_update(info, ctx.clone());
+                            }
                         }
                     });
                 });
