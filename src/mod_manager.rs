@@ -105,7 +105,7 @@ fn extract_zip(bytes: &[u8], dest: &Path) -> Result<(), String> {
 fn filename_from_url(url: &str, fallback_id: &str) -> String {
     let without_query = url.split('?').next().unwrap_or(url);
     without_query
-        .rsplit('/')
+        .rsplit(&['/', '\\'][..])
         .next()
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string())

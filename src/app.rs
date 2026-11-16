@@ -2,7 +2,7 @@ use crate::catalog::{fetch_catalog, load_cached_catalog, load_state, save_state}
 use crate::mod_manager::{
     disable_mod, enable_mod, install_bepinex, install_mod, is_bepinex_installed, uninstall_mod,
 };
-use crate::models::{AppState, InstalledMod, ModCatalog, ModEntry, STEAM_APP_ID};
+use crate::models::{AppState, InstallTarget, InstalledMod, ModCatalog, ModEntry, STEAM_APP_ID};
 use crate::paths::{detect_game_dir, LauncherPaths};
 use crate::updater::{apply_update_and_restart, check_for_update, AppUpdateInfo};
 use eframe::egui::{self, Color32, RichText, Rounding, Stroke};
@@ -959,7 +959,53 @@ impl ModLauncherApp {
                     .inner_margin(egui::Margin::symmetric(24.0, 18.0)),
             )
             .show(ctx, |ui| {
-                ui.label(RichText::new("Installed Plugins").size(20.0).strong());
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Installed Plugins").size(20.0).strong());
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .add_enabled(!self.busy, primary_button("+ Add Local .dll / .zip", ACCENT_BLUE))
+                            .clicked()
+                        {
+                            if let Some(path) = rfd::FileDialog::new()
+                                .add_filter("Plugin files", &["dll", "zip"])
+                                .pick_file()
+                            {
+                                let stem = path
+                                    .file_stem()
+                                    .and_then(|s| s.to_str())
+                                    .unwrap_or("custom-plugin")
+                                    .to_string();
+                                let id = format!(
+                                    "local-{}",
+                                    stem.to_lowercase()
+                                        .chars()
+                                        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+                                        .collect::<String>()
+                                );
+                                let entry = ModEntry {
+                                    id,
+                                    name: stem,
+                                    version: "local".to_string(),
+                                    author: "Local".to_string(),
+                                    summary: String::new(),
+                                    description: String::new(),
+                                    instructions: String::new(),
+                                    download_url: format!("file://{}", path.display()),
+                                    icon_url: None,
+                                    previews: Vec::new(),
+                                    image_url: None,
+                                    video_url: None,
+                                    sha256: None,
+                                    install_target: InstallTarget::BepInExPlugins,
+                                    tags: Vec::new(),
+                                    updated_at: String::new(),
+                                    changelog: Vec::new(),
+                                };
+                                self.trigger_install_mod(entry, ctx.clone());
+                            }
+                        }
+                    });
+                });
                 ui.add_space(8.0);
 
                 if installed_ids.is_empty() {
