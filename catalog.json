@@ -21,6 +21,24 @@
         "https://youtu.be/3Et3nGdgPHU",
         "https://youtu.be/GNEBVRTZb8s"
       ]
+    },
+    {
+      "id": "determinism",
+      "name": "Determinism+",
+      "version": "2.244.0",
+      "author": "Point",
+      "summary": "Overhauls AI decision-making, combat balance, peace treaties, and adds 700+ formables, a Timeline Editor, custom formable creation, and detailed stats/visuals (v2.243.0).",
+      "description": "Determinism+ v2 (2.243.0) is a complete overhaul featuring much smarter AI, a full combat rework, realistic peace treaties, 700+ formable nations, a Timeline Editor, and much more.\n\nWhy Vanilla Needed This:\nIn vanilla, nations attack random neighbors and tiny countries push just as hard as major powers—letting places like Belgium conquer all of Europe with unrealistic border gore.\n\nWhat's Included in v2:\n• Smarter, Reasoned Wars: Nations no longer declare random wars—conflicts start over rivalry, territorial goals (such as land needed for formables), balance of power, or resentment.\n• Power-Based Combat & Overextension: National strength actually matters so major powers don't lose to tiny states, while rapid overexpansion slows them down and triggers coalitions.\n• Clean Peace Treaties: Winners take the territory they held, puppet defeated nations, or demand war reparations—keeping borders clean with far less enclave border gore.\n• 700+ Formable Nations: Supported across all 10 maps with authentic flags and announcement banners for major formables.\n• Custom Formables: Create your own formable nations directly from the Setup tab.\n• Timeline Editor: Script what countries do—who they attack, form, or puppet—ideal for content creators and custom scenarios.\n• Visuals, Stats & Charts: Frontline numbers, a live rankings chart, and an end-of-game summary screen.\n• Workshop & Direct Sharing: Share your custom formables and timelines directly or alongside your Steam Workshop scenarios.\n• Extensive Custom Settings: Fine-tune dozens of options to tailor the simulation to your playstyle.\nPeace that makes sense: Winners take what they held, puppet the loser or pay money. Also borders stay much more clean and there is much less border gore with random enclaves.\n700+ formable nations: Across all 10 maps, with real flags and a banner when a big one forms.\nTimelines: You can script what you want other countries to do so who they attack, form, puppet. This will be super helpful to content creators and more.\nNumbers on every front and visuals: A rankings chart and an ending screen that sums up your game.\nShare your formables and timelines: with your scenarios on the workshop or just send it to someone directly\nCustom settings: Choose out of ton of settings to make your experience much more enjoyable\nMake your own formables: You will be able to make your own formables found in the setup tab",
+      "download_url": "https://raw.githubusercontent.com/omarxi/solanin/main/mods/AoCDeterminism-2.244.0.dll",
+      "icon_url": null,
+      "previews": [],
+      "image_url": null,
+      "video_url": null,
+      "sha256": null,
+      "install_target": "bepinex_plugins",
+      "tags": [],
+      "updated_at": "2026-11-16",
+      "changelog": []
     }
   ]
 }
