@@ -71,6 +71,7 @@ pub struct ModLauncherApp {
 
 fn apply_theme(ctx: &egui::Context) {
     let mut visuals = egui::Visuals::dark();
+    visuals.dark_mode = true;
     visuals.window_fill = BG_MAIN;
     visuals.panel_fill = BG_PANEL;
     visuals.extreme_bg_color = Color32::from_rgb(13, 15, 19);
@@ -81,17 +82,21 @@ fn apply_theme(ctx: &egui::Context) {
 
     visuals.widgets.noninteractive.bg_fill = BG_CARD;
     visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, BORDER_SUBTLE);
+    visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, TEXT_PRIMARY);
     visuals.widgets.noninteractive.rounding = Rounding::same(6.0);
 
     visuals.widgets.inactive.bg_fill = Color32::from_rgb(38, 43, 54);
     visuals.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, BORDER_SUBTLE);
+    visuals.widgets.inactive.fg_stroke = Stroke::new(1.0_f32, TEXT_PRIMARY);
     visuals.widgets.inactive.rounding = Rounding::same(6.0);
 
     visuals.widgets.hovered.bg_fill = Color32::from_rgb(49, 55, 70);
     visuals.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, Color32::from_rgb(72, 80, 99));
+    visuals.widgets.hovered.fg_stroke = Stroke::new(1.0_f32, Color32::WHITE);
     visuals.widgets.hovered.rounding = Rounding::same(6.0);
 
     visuals.widgets.active.bg_fill = ACCENT_BLUE;
+    visuals.widgets.active.fg_stroke = Stroke::new(1.0_f32, Color32::WHITE);
     visuals.widgets.active.rounding = Rounding::same(6.0);
 
     ctx.set_visuals(visuals);
@@ -518,7 +523,7 @@ impl ModLauncherApp {
         .fill(if active {
             ACCENT_BLUE
         } else {
-            Color32::TRANSPARENT
+            BG_PANEL
         })
         .stroke(Stroke::NONE);
 
@@ -916,19 +921,26 @@ impl ModLauncherApp {
                                             .size(15.0)
                                             .strong(),
                                     );
-                                    let status_txt = if inst.enabled {
-                                        format!("Enabled  ·  {} files", inst.deployed_files.len())
+                                    let count = inst.deployed_files.len();
+                                    let file_word = if count == 1 { "file" } else { "files" };
+                                    let instr = self
+                                        .catalog
+                                        .mods
+                                        .iter()
+                                        .find(|m| m.id == inst.id)
+                                        .map(|m| m.instructions.trim().to_string())
+                                        .filter(|s| !s.is_empty())
+                                        .unwrap_or_else(|| inst.instructions.trim().to_string());
+
+                                    let mut status_txt = if inst.enabled {
+                                        format!("Enabled  ·  {count} {file_word}")
                                     } else {
                                         "Disabled".to_string()
                                     };
-                                    ui.label(RichText::new(status_txt).small().color(TEXT_MUTED));
-                                    if !inst.instructions.trim().is_empty() {
-                                        ui.label(
-                                            RichText::new(format!("How to use: {}", inst.instructions.trim()))
-                                                .small()
-                                                .color(ACCENT_BLUE),
-                                        );
+                                    if !instr.is_empty() {
+                                        status_txt.push_str(&format!("  ·  {instr}"));
                                     }
+                                    ui.label(RichText::new(status_txt).small().color(TEXT_MUTED));
                                 });
 
                                 ui.with_layout(

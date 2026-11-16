@@ -3,11 +3,13 @@ mod catalog;
 mod mod_manager;
 mod models;
 mod paths;
+mod shortcut;
 
 use app::ModLauncherApp;
 use eframe::egui;
 
 fn main() -> eframe::Result<()> {
+    shortcut::ensure_appimage_desktop_shortcut();
     let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png")).ok();
 
     let mut viewport = egui::ViewportBuilder::default()
