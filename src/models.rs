@@ -12,6 +12,7 @@ pub const DEFAULT_CATALOG_URL: &str =
 #[serde(rename_all = "snake_case")]
 pub enum InstallTarget {
     #[default]
+    #[serde(rename = "bepinex_plugins", alias = "bep_in_ex_plugins")]
     BepInExPlugins,
     GameDir,
 }
