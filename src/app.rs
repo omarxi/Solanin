@@ -3,8 +3,10 @@ use crate::mod_manager::{disable_mod, enable_mod, install_mod, uninstall_mod};
 use crate::models::{AppState, InstalledMod, ModCatalog, ModEntry, STEAM_APP_ID};
 use crate::paths::{detect_game_dir, LauncherPaths};
 use eframe::egui::{self, Color32, RichText, Rounding, Stroke};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::time::Duration;
 
 const BG_MAIN: Color32 = Color32::from_rgb(17, 19, 24);
 const BG_PANEL: Color32 = Color32::from_rgb(23, 26, 33);
@@ -31,6 +33,10 @@ enum WorkerMsg {
         id: String,
         result: Result<InstalledMod, String>,
     },
+    ImageLoaded {
+        url: String,
+        result: Result<egui::ColorImage, String>,
+    },
 }
 
 pub struct ModLauncherApp {
@@ -46,6 +52,8 @@ pub struct ModLauncherApp {
     rx: Receiver<WorkerMsg>,
     catalog_url_input: String,
     game_dir_input: String,
+    preview_textures: HashMap<String, Option<egui::TextureHandle>>,
+    loading_images: HashSet<String>,
 }
 
 fn apply_theme(ctx: &egui::Context) {
@@ -129,6 +137,8 @@ impl ModLauncherApp {
             rx,
             catalog_url_input,
             game_dir_input,
+            preview_textures: HashMap::new(),
+            loading_images: HashSet::new(),
         };
 
         let _ = save_state(&app.paths, &app.state);
@@ -184,11 +194,48 @@ impl ModLauncherApp {
         });
     }
 
-    fn poll_worker(&mut self) {
+    fn trigger_fetch_image(&mut self, url: String, ctx: egui::Context) {
+        if self.loading_images.contains(&url) || self.preview_textures.contains_key(&url) {
+            return;
+        }
+        self.loading_images.insert(url.clone());
+        let tx = self.tx.clone();
+
+        std::thread::spawn(move || {
+            let result = (|| -> Result<egui::ColorImage, String> {
+                let bytes = if let Some(local) = url.strip_prefix("file://") {
+                    std::fs::read(local).map_err(|e| e.to_string())?
+                } else {
+                    let client = reqwest::blocking::Client::builder()
+                        .timeout(Duration::from_secs(15))
+                        .user_agent("Solanin/0.1")
+                        .build()
+                        .map_err(|e| e.to_string())?;
+                    let resp = client.get(&url).send().map_err(|e| e.to_string())?;
+                    if !resp.status().is_success() {
+                        return Err(format!("HTTP {}", resp.status()));
+                    }
+                    resp.bytes().map_err(|e| e.to_string())?.to_vec()
+                };
+                let img = image::load_from_memory(&bytes).map_err(|e| e.to_string())?;
+                let rgba = img.to_rgba8();
+                let size = [rgba.width() as usize, rgba.height() as usize];
+                Ok(egui::ColorImage::from_rgba_unmultiplied(
+                    size,
+                    rgba.as_flat_samples().as_slice(),
+                ))
+            })();
+
+            let _ = tx.send(WorkerMsg::ImageLoaded { url, result });
+            ctx.request_repaint();
+        });
+    }
+
+    fn poll_worker(&mut self, ctx: &egui::Context) {
         while let Ok(msg) = self.rx.try_recv() {
-            self.busy = false;
             match msg {
                 WorkerMsg::CatalogFetched(Ok(cat)) => {
+                    self.busy = false;
                     let count = cat.mods.len();
                     self.catalog = cat;
                     self.status_message = format!("{count} plugins loaded");
@@ -197,19 +244,30 @@ impl ModLauncherApp {
                     }
                 }
                 WorkerMsg::CatalogFetched(Err(err)) => {
+                    self.busy = false;
                     self.status_message = format!("Could not refresh list: {err}");
                 }
-                WorkerMsg::ModInstalled { id, result } => match result {
-                    Ok(installed) => {
-                        let name = installed.name.clone();
-                        self.state.installed.insert(id, installed);
-                        let _ = save_state(&self.paths, &self.state);
-                        self.status_message = format!("Installed {name}");
+                WorkerMsg::ModInstalled { id, result } => {
+                    self.busy = false;
+                    match result {
+                        Ok(installed) => {
+                            let name = installed.name.clone();
+                            self.state.installed.insert(id, installed);
+                            let _ = save_state(&self.paths, &self.state);
+                            self.status_message = format!("Installed {name}");
+                        }
+                        Err(err) => {
+                            self.status_message = format!("Install failed: {err}");
+                        }
                     }
-                    Err(err) => {
-                        self.status_message = format!("Install failed: {err}");
-                    }
-                },
+                }
+                WorkerMsg::ImageLoaded { url, result } => {
+                    self.loading_images.remove(&url);
+                    let tex = result.ok().map(|color_img| {
+                        ctx.load_texture(&url, color_img, egui::TextureOptions::LINEAR)
+                    });
+                    self.preview_textures.insert(url, tex);
+                }
             }
         }
     }
@@ -517,6 +575,30 @@ impl ModLauncherApp {
                 ui.add_space(12.0);
 
                 egui::ScrollArea::vertical().show(ui, |ui| {
+                    if let Some(ref img_url) = m.image_url {
+                        let trimmed = img_url.trim();
+                        if !trimmed.is_empty() {
+                            if let Some(Some(tex)) = self.preview_textures.get(trimmed) {
+                                ui.add(
+                                    egui::Image::new(tex)
+                                        .max_width(ui.available_width().min(520.0))
+                                        .max_height(260.0)
+                                        .rounding(Rounding::same(8.0)),
+                                );
+                                ui.add_space(10.0);
+                            } else if self.loading_images.contains(trimmed) {
+                                ui.label(
+                                    RichText::new("Loading preview...")
+                                        .small()
+                                        .color(TEXT_MUTED),
+                                );
+                                ui.add_space(8.0);
+                            } else if !self.preview_textures.contains_key(trimmed) {
+                                self.trigger_fetch_image(trimmed.to_string(), ctx.clone());
+                            }
+                        }
+                    }
+
                     if !m.summary.is_empty() {
                         ui.label(RichText::new(&m.summary).size(15.0).strong());
                         ui.add_space(8.0);
@@ -669,7 +751,7 @@ impl ModLauncherApp {
 
 impl eframe::App for ModLauncherApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.poll_worker();
+        self.poll_worker(ctx);
         self.draw_top_bar(ctx);
         self.draw_status_bar(ctx);
 

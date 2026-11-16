@@ -42,6 +42,8 @@ pub struct ModEntry {
     pub description: String,
     pub download_url: String,
     #[serde(default)]
+    pub image_url: Option<String>,
+    #[serde(default)]
     pub sha256: Option<String>,
     #[serde(default)]
     pub install_target: InstallTarget,
