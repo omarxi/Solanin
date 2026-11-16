@@ -12,6 +12,7 @@ use app::ModLauncherApp;
 use eframe::egui;
 
 fn main() -> eframe::Result<()> {
+    updater::cleanup_old_exe();
     shortcut::ensure_appimage_desktop_shortcut();
     let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png")).ok();
 

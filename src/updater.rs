@@ -160,21 +160,18 @@ pub fn apply_update_and_restart(info: &AppUpdateInfo) -> Result<(), String> {
         }
 
         if let Some(ref exe_url) = info.exe_url {
-            let new_exe = current_exe.with_extension("exe.new");
+            let old_exe = current_exe.with_extension("exe.old");
+            let _ = std::fs::remove_file(&old_exe);
             let bytes = download_file(exe_url)?;
-            std::fs::write(&new_exe, bytes)
-                .map_err(|e| format!("Failed to write update: {e}"))?;
-
-            let script = format!(
-                "timeout /t 2 /nobreak >nul & move /Y \"{}\" \"{}\" & start \"\" \"{}\"",
-                new_exe.display(),
-                current_exe.display(),
-                current_exe.display()
-            );
-            std::process::Command::new("cmd")
-                .args(["/C", &script])
+            std::fs::rename(&current_exe, &old_exe)
+                .map_err(|e| format!("Failed to stage update: {e}"))?;
+            if let Err(e) = std::fs::write(&current_exe, bytes) {
+                let _ = std::fs::rename(&old_exe, &current_exe);
+                return Err(format!("Failed to write update: {e}"));
+            }
+            std::process::Command::new(&current_exe)
                 .spawn()
-                .map_err(|e| format!("Failed to launch updater: {e}"))?;
+                .map_err(|e| format!("Failed to restart Solanin: {e}"))?;
             std::process::exit(0);
         }
 
@@ -186,5 +183,15 @@ pub fn apply_update_and_restart(info: &AppUpdateInfo) -> Result<(), String> {
     {
         let _ = open::that(&info.html_url);
         Ok(())
+    }
+}
+
+pub fn cleanup_old_exe() {
+    #[cfg(target_os = "windows")]
+    if let Ok(current_exe) = std::env::current_exe() {
+        let old_exe = current_exe.with_extension("exe.old");
+        if old_exe.exists() {
+            let _ = std::fs::remove_file(old_exe);
+        }
     }
 }
