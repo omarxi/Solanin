@@ -48,6 +48,8 @@ pub struct ModEntry {
     pub summary: String,
     #[serde(default)]
     pub description: String,
+    #[serde(default)]
+    pub instructions: String,
     pub download_url: String,
     #[serde(default)]
     pub icon_url: Option<String>,
@@ -90,6 +92,8 @@ pub struct InstalledMod {
     pub author: String,
     #[serde(default)]
     pub description: String,
+    #[serde(default)]
+    pub instructions: String,
     #[serde(default)]
     pub install_target: InstallTarget,
     pub enabled: bool,

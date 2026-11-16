@@ -66,6 +66,7 @@ pub struct ModLauncherApp {
     loading_images: HashSet<String>,
     bepinex_installing: bool,
     logo_texture: Option<egui::TextureHandle>,
+    install_popup: Option<(String, String)>,
 }
 
 fn apply_theme(ctx: &egui::Context) {
@@ -166,6 +167,7 @@ impl ModLauncherApp {
             loading_images: HashSet::new(),
             bepinex_installing: false,
             logo_texture,
+            install_popup: None,
         };
 
         let _ = save_state(&app.paths, &app.state);
@@ -348,9 +350,13 @@ impl ModLauncherApp {
                     match result {
                         Ok(installed) => {
                             let name = installed.name.clone();
+                            let instr = installed.instructions.trim().to_string();
                             self.state.installed.insert(id, installed);
                             let _ = save_state(&self.paths, &self.state);
                             self.status_message = format!("Installed {name}");
+                            if !instr.is_empty() {
+                                self.install_popup = Some((name, instr));
+                            }
                         }
                         Err(err) => {
                             self.status_message = format!("Install failed: {err}");
@@ -916,6 +922,13 @@ impl ModLauncherApp {
                                         "Disabled".to_string()
                                     };
                                     ui.label(RichText::new(status_txt).small().color(TEXT_MUTED));
+                                    if !inst.instructions.trim().is_empty() {
+                                        ui.label(
+                                            RichText::new(format!("How to use: {}", inst.instructions.trim()))
+                                                .small()
+                                                .color(ACCENT_BLUE),
+                                        );
+                                    }
                                 });
 
                                 ui.with_layout(
@@ -1055,6 +1068,29 @@ impl eframe::App for ModLauncherApp {
             Tab::Browse => self.draw_browse_tab(ctx),
             Tab::Installed => self.draw_installed_tab(ctx),
             Tab::Settings => self.draw_settings_tab(ctx),
+        }
+
+        if let Some((name, instr)) = self.install_popup.clone() {
+            let mut close = false;
+            egui::Window::new(format!("{name} Installed"))
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.set_min_width(340.0);
+                    ui.label(RichText::new("How to use:").strong());
+                    ui.add_space(4.0);
+                    ui.label(RichText::new(&instr).color(TEXT_PRIMARY));
+                    ui.add_space(12.0);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.add(primary_button("Got it", ACCENT_BLUE)).clicked() {
+                            close = true;
+                        }
+                    });
+                });
+            if close {
+                self.install_popup = None;
+            }
         }
     }
 }

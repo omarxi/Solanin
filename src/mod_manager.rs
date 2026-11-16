@@ -164,6 +164,7 @@ pub fn install_mod(
         version: entry.version.clone(),
         author: entry.author.clone(),
         description: entry.description.clone(),
+        instructions: entry.instructions.clone(),
         install_target: entry.install_target.clone(),
         enabled: false,
         staging_dir,
