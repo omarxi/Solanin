@@ -39,6 +39,27 @@
       "tags": [],
       "updated_at": "2026-11-16",
       "changelog": []
+    },
+    {
+      "id": "Contours-Of-conflict",
+      "name": "Contours Of Conflict",
+      "version": "1.0.0",
+      "author": "zeezeedoom",
+      "summary": "This is an ages of conflict mod where it dramatically changes the tiles into smooth edges and borders.",
+      "description": "",
+      "download_url": "https://raw.githubusercontent.com/omarxi/solanin/main/mods/ContoursOfConflict.dll",
+      "icon_url": null,
+      "previews": [
+        "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/image.png",
+        "https://youtu.be/A4cYagjzVnI"
+      ],
+      "image_url": null,
+      "video_url": null,
+      "sha256": null,
+      "install_target": "bepinex_plugins",
+      "tags": [],
+      "updated_at": "2026-11-16",
+      "changelog": []
     }
   ]
 }
