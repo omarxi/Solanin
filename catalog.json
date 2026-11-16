@@ -1,0 +1,19 @@
+{
+  "name": "Ages of Conflict Mod Catalog",
+  "announcement": "Welcome! Select a mod on the left to read its description and install it.",
+  "mods": [
+    {
+      "id": "example-europe-1936",
+      "name": "Europe 1936 Scenario",
+      "version": "1.0.0",
+      "author": "YourName",
+      "summary": "A custom historical 1936 Europe scenario.",
+      "description": "Includes custom borders, starting alliances, and balanced city populations for 1936 Europe.\n\nReplace this entry using the web editor in web/index.html!",
+      "download_url": "https://example.com/mods/europe-1936.zip",
+      "sha256": null,
+      "install_target": "custom_scenarios",
+      "tags": ["historical", "europe", "scenario"],
+      "updated_at": "2026-11-16"
+    }
+  ]
+}

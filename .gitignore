@@ -1,0 +1,17 @@
+# Rust build output & downloaded packaging tools
+/target/
+**/*.rs.bk
+*.pdb
+
+# Local-only web catalog manager (keep private)
+/web/
+
+# Local launcher runtime state (if tested in repo root)
+state.json
+catalog_cache.json
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

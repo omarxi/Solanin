@@ -1,0 +1,22 @@
+[package]
+name = "ages-of-conflict-mod-launcher"
+version = "0.1.0"
+edition = "2021"
+description = "A cross-platform mod launcher for Ages of Conflict: World War Simulator"
+
+[dependencies]
+eframe = "0.29"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
+directories = "5.0"
+open = "5.3"
+sha2 = "0.10"
+hex = "0.4"
+walkdir = "2.5"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
