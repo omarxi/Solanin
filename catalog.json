@@ -1,18 +1,18 @@
 {
-  "name": "Ages of Conflict Plugins",
-  "announcement": null,
+  "name": "Ages of Conflict Mod Catalog",
+  "announcement": "",
   "mods": [
     {
-      "id": "example-plugin",
-      "name": "Example Plugin",
-      "version": "1.0.0",
-      "author": "omarxi",
-      "summary": "A sample BepInEx plugin for Ages of Conflict.",
-      "description": "Replace this entry using your local web/index.html manager and publish it to GitHub.",
-      "download_url": "https://example.com/mods/example-plugin.zip",
+      "id": "skeptics-sillier-modpack",
+      "name": "Skeptic's Sillier Modpack",
+      "version": "2.3.1",
+      "author": "Skeptic",
+      "summary": "Overhaul your battlefield readability and UI with customizable Flag Units v2, dedicated Naval Flag Units, a dynamic Frontline Strength tracker with a live war overview sidebar, and full Font & Theme GUI Customization.",
+      "description": "\n\nTake complete visual and tactical control over the map with a suite of military UI, map indicator, and interface customization features:\n\n* **Flag Units v2:** Expands significantly on the vanilla flag unit system with deep visual and behavioral customization:\n* **Custom \"Rout\" Indicators:** Units dynamically pulse red/green when routing so you can immediately spot collapsing lines.\n* **Frontline-Proportional Facing:** Flags automatically orient themselves relative to the active frontline.\n* **Visual Polish & Army Support:** Includes full support for dot armies, smooth fade-in/fade-out transitions for units after battles, and subtle visual improvements to reinforcements.\n\n\n* **Frontline Strength & War Sidebar:** Get an immediate read on the scale of every conflict directly on the map *(calculation math is actively being fine-tuned)*.\n* **Customizable Map Text:** Displays the total number of units along each frontline, with full controls to adjust text curvature, font style, frontline detection distance, and more.\n* **Live War Sidebar:** A built-in sidebar summarizing active wars, total unit counts, and frontline breakdowns at a glance.\n\n\n* **Naval Flag Units:** Brings flag units to the seas with specialized mechanics and behaviors designed specifically around naval warfare rather than standard land combat.\n* **Font & Theme GUI Customization:** Personalize your experience with custom fonts and interface themes across the mod's clean, responsive C#-built UI.",
+      "download_url": "https://raw.githubusercontent.com/omarxi/solanin/main/mods/SkepticsSillierModpack.dll",
       "sha256": null,
       "install_target": "bepinex_plugins",
-      "tags": ["qol", "plugin"],
+      "tags": [],
       "updated_at": "2026-11-16"
     }
   ]
