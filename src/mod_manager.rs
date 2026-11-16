@@ -225,6 +225,63 @@ pub fn disable_mod(installed: &mut InstalledMod) -> Result<(), String> {
     Ok(())
 }
 
+const BEPINEX_LINUX_URL: &str =
+    "https://github.com/BepInEx/BepInEx/releases/download/v5.4.23.6/BepInEx_linux_x64_5.4.23.6.zip";
+const BEPINEX_WIN_URL: &str =
+    "https://github.com/BepInEx/BepInEx/releases/download/v5.4.23.6/BepInEx_win_x64_5.4.23.6.zip";
+
+pub fn is_bepinex_installed(game_dir: &Path) -> bool {
+    game_dir
+        .join("BepInEx")
+        .join("core")
+        .join("BepInEx.dll")
+        .exists()
+}
+
+pub fn install_bepinex(game_dir: &Path) -> Result<(), String> {
+    if !game_dir.exists() {
+        return Err(format!("Game folder does not exist: {}", game_dir.display()));
+    }
+
+    let is_linux_native = game_dir.join("Ages of Conflict.x86_64").exists();
+    let url = if is_linux_native {
+        BEPINEX_LINUX_URL
+    } else {
+        BEPINEX_WIN_URL
+    };
+
+    let bytes = download_bytes(url)?;
+    extract_zip(&bytes, game_dir)?;
+
+    let plugins_dir = game_dir.join("BepInEx").join("plugins");
+    std::fs::create_dir_all(&plugins_dir)
+        .map_err(|e| format!("Failed to create BepInEx/plugins: {e}"))?;
+
+    if is_linux_native {
+        let run_sh = game_dir.join("run_bepinex.sh");
+        if run_sh.exists() {
+            if let Ok(content) = std::fs::read_to_string(&run_sh) {
+                let updated = content.replace(
+                    "executable_name=\"\"",
+                    "executable_name=\"Ages of Conflict.x86_64\"",
+                );
+                let _ = std::fs::write(&run_sh, updated);
+            }
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                if let Ok(meta) = std::fs::metadata(&run_sh) {
+                    let mut perms = meta.permissions();
+                    perms.set_mode(0o755);
+                    let _ = std::fs::set_permissions(&run_sh, perms);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub fn uninstall_mod(installed: &mut InstalledMod) -> Result<(), String> {
     disable_mod(installed)?;
     if installed.staging_dir.exists() {

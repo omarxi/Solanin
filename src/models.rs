@@ -14,8 +14,6 @@ pub enum InstallTarget {
     #[default]
     BepInExPlugins,
     GameDir,
-    #[serde(untagged)]
-    RelativeToGame(String),
 }
 
 impl InstallTarget {
@@ -23,7 +21,6 @@ impl InstallTarget {
         match self {
             InstallTarget::BepInExPlugins => "BepInEx/plugins".to_string(),
             InstallTarget::GameDir => "Game Folder".to_string(),
-            InstallTarget::RelativeToGame(rel) => format!("Game/{rel}"),
         }
     }
 }

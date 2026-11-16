@@ -1,5 +1,7 @@
 use crate::catalog::{fetch_catalog, load_cached_catalog, load_state, save_state};
-use crate::mod_manager::{disable_mod, enable_mod, install_mod, uninstall_mod};
+use crate::mod_manager::{
+    disable_mod, enable_mod, install_bepinex, install_mod, is_bepinex_installed, uninstall_mod,
+};
 use crate::models::{AppState, InstalledMod, ModCatalog, ModEntry, STEAM_APP_ID};
 use crate::paths::{detect_game_dir, LauncherPaths};
 use eframe::egui::{self, Color32, RichText, Rounding, Stroke};
@@ -37,6 +39,7 @@ enum WorkerMsg {
         url: String,
         result: Result<egui::ColorImage, String>,
     },
+    BepInExInstalled(Result<(), String>),
 }
 
 pub struct ModLauncherApp {
@@ -54,6 +57,7 @@ pub struct ModLauncherApp {
     game_dir_input: String,
     preview_textures: HashMap<String, Option<egui::TextureHandle>>,
     loading_images: HashSet<String>,
+    bepinex_installing: bool,
 }
 
 fn apply_theme(ctx: &egui::Context) {
@@ -139,10 +143,16 @@ impl ModLauncherApp {
             game_dir_input,
             preview_textures: HashMap::new(),
             loading_images: HashSet::new(),
+            bepinex_installing: false,
         };
 
         let _ = save_state(&app.paths, &app.state);
         app.trigger_fetch_catalog(cc.egui_ctx.clone());
+        if let Some(ref game_dir) = app.state.config.game_dir.clone() {
+            if !is_bepinex_installed(game_dir) {
+                app.trigger_install_bepinex(game_dir.clone(), cc.egui_ctx.clone());
+            }
+        }
         app
     }
 
@@ -190,6 +200,21 @@ impl ModLauncherApp {
             };
             let result = install_mod(&entry, &paths, &config, existing.as_ref());
             let _ = tx.send(WorkerMsg::ModInstalled { id, result });
+            ctx.request_repaint();
+        });
+    }
+
+    fn trigger_install_bepinex(&mut self, game_dir: PathBuf, ctx: egui::Context) {
+        if self.bepinex_installing {
+            return;
+        }
+        self.bepinex_installing = true;
+        self.status_message = "Installing BepInEx into game folder...".to_string();
+        let tx = self.tx.clone();
+
+        std::thread::spawn(move || {
+            let result = install_bepinex(&game_dir);
+            let _ = tx.send(WorkerMsg::BepInExInstalled(result));
             ctx.request_repaint();
         });
     }
@@ -268,6 +293,17 @@ impl ModLauncherApp {
                     });
                     self.preview_textures.insert(url, tex);
                 }
+                WorkerMsg::BepInExInstalled(result) => {
+                    self.bepinex_installing = false;
+                    match result {
+                        Ok(()) => {
+                            self.status_message = "BepInEx installed and ready".to_string();
+                        }
+                        Err(err) => {
+                            self.status_message = format!("BepInEx install failed: {err}");
+                        }
+                    }
+                }
             }
         }
     }
@@ -332,9 +368,28 @@ impl ModLauncherApp {
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.add(primary_button("▶  Play", ACCENT_GREEN)).clicked() {
-                            let uri = format!("steam://rungameid/{STEAM_APP_ID}");
-                            if let Err(e) = open::that(&uri) {
-                                self.status_message = format!("Could not launch Steam: {e}");
+                            let launched_via_sh = self
+                                .state
+                                .config
+                                .game_dir
+                                .as_ref()
+                                .map(|g| g.join("run_bepinex.sh"))
+                                .filter(|sh| sh.exists())
+                                .and_then(|sh| {
+                                    let dir = sh.parent()?.to_path_buf();
+                                    std::process::Command::new("bash")
+                                        .arg(&sh)
+                                        .current_dir(dir)
+                                        .spawn()
+                                        .ok()
+                                })
+                                .is_some();
+
+                            if !launched_via_sh {
+                                let uri = format!("steam://rungameid/{STEAM_APP_ID}");
+                                if let Err(e) = open::that(&uri) {
+                                    self.status_message = format!("Could not launch Steam: {e}");
+                                }
                             }
                         }
                         if ui
@@ -376,7 +431,7 @@ impl ModLauncherApp {
             )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    if self.busy {
+                    if self.busy || self.bepinex_installing {
                         ui.spinner();
                     }
                     ui.label(RichText::new(&self.status_message).small().color(TEXT_MUTED));
@@ -733,10 +788,35 @@ impl ModLauncherApp {
                                 Some(PathBuf::from(self.game_dir_input.trim()))
                             };
                             match save_state(&self.paths, &self.state) {
-                                Ok(()) => self.status_message = "Settings saved".to_string(),
+                                Ok(()) => {
+                                    self.status_message = "Settings saved".to_string();
+                                    if let Some(ref game_dir) = self.state.config.game_dir.clone() {
+                                        if !is_bepinex_installed(game_dir) {
+                                            self.trigger_install_bepinex(
+                                                game_dir.clone(),
+                                                ctx.clone(),
+                                            );
+                                        }
+                                    }
+                                }
                                 Err(e) => {
                                     self.status_message = format!("Failed to save settings: {e}")
                                 }
+                            }
+                        }
+
+                        if let Some(ref game_dir) = self.state.config.game_dir.clone() {
+                            let installed = is_bepinex_installed(game_dir);
+                            let btn_lbl = if installed {
+                                "Reinstall BepInEx"
+                            } else {
+                                "Install BepInEx"
+                            };
+                            if ui
+                                .add_enabled(!self.bepinex_installing, egui::Button::new(btn_lbl))
+                                .clicked()
+                            {
+                                self.trigger_install_bepinex(game_dir.clone(), ctx.clone());
                             }
                         }
 
@@ -744,6 +824,15 @@ impl ModLauncherApp {
                             let _ = open::that(&self.paths.data_dir);
                         }
                     });
+
+                    ui.add_space(6.0);
+                    let bepinex_status = match &self.state.config.game_dir {
+                        Some(g) if self.bepinex_installing => "BepInEx: Installing...".to_string(),
+                        Some(g) if is_bepinex_installed(g) => "BepInEx: Installed ✓".to_string(),
+                        Some(_) => "BepInEx: Not installed".to_string(),
+                        None => "BepInEx: Set game folder first".to_string(),
+                    };
+                    ui.label(RichText::new(bepinex_status).small().color(TEXT_MUTED));
                 });
             });
     }

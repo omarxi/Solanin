@@ -134,6 +134,5 @@ pub fn resolve_target_dir(
     match target {
         InstallTarget::BepInExPlugins => Ok(game.join("BepInEx").join("plugins")),
         InstallTarget::GameDir => Ok(game.clone()),
-        InstallTarget::RelativeToGame(rel) => Ok(game.join(rel)),
     }
 }
