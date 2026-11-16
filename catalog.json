@@ -13,7 +13,8 @@
       "sha256": null,
       "install_target": "bepinex_plugins",
       "tags": [],
-      "updated_at": "2026-11-16"
+      "updated_at": "2026-11-16",
+      "image_url": "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/skeptics2.png"
     }
   ]
 }
