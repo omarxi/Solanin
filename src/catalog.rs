@@ -1,5 +1,5 @@
 use crate::models::{AppState, ModCatalog};
-use crate::paths::{detect_data_dir, detect_game_dir, LauncherPaths};
+use crate::paths::{detect_game_dir, LauncherPaths};
 use std::path::Path;
 use std::time::Duration;
 
@@ -15,9 +15,6 @@ pub fn load_state(paths: &LauncherPaths) -> AppState {
 
     if state.config.game_dir.is_none() {
         state.config.game_dir = detect_game_dir();
-    }
-    if state.config.data_dir.is_none() {
-        state.config.data_dir = detect_data_dir();
     }
 
     state
@@ -55,7 +52,7 @@ pub fn fetch_catalog(url: &str, paths: &LauncherPaths) -> Result<ModCatalog, Str
     } else {
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(15))
-            .user_agent("AgesOfConflictModLauncher/0.1")
+            .user_agent("Solanin/0.1")
             .build()
             .map_err(|e| format!("HTTP client error: {e}"))?;
 

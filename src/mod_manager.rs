@@ -27,7 +27,7 @@ fn download_bytes(url: &str) -> Result<Vec<u8>, String> {
 
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(120))
-        .user_agent("AgesOfConflictModLauncher/0.1")
+        .user_agent("Solanin/0.1")
         .build()
         .map_err(|e| format!("HTTP client error: {e}"))?;
 

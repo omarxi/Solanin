@@ -5,17 +5,15 @@ use std::path::PathBuf;
 pub const STEAM_APP_ID: &str = "2186320";
 
 pub const DEFAULT_CATALOG_URL: &str =
-    "https://raw.githubusercontent.com/omarxi/ages-of-conflict-mod-launcher/main/catalog.json";
+    "https://raw.githubusercontent.com/omarxi/solanin/main/catalog.json";
 
-/// Where a mod's files should be placed when enabled.
+/// Where a plugin's files are placed when enabled.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum InstallTarget {
     #[default]
-    CustomMaps,
-    CustomScenarios,
-    GameDir,
     BepInExPlugins,
+    GameDir,
     #[serde(untagged)]
     RelativeToGame(String),
 }
@@ -23,16 +21,14 @@ pub enum InstallTarget {
 impl InstallTarget {
     pub fn label(&self) -> String {
         match self {
-            InstallTarget::CustomMaps => "Custom Maps".to_string(),
-            InstallTarget::CustomScenarios => "Custom Scenarios".to_string(),
-            InstallTarget::GameDir => "Game Directory".to_string(),
             InstallTarget::BepInExPlugins => "BepInEx/plugins".to_string(),
+            InstallTarget::GameDir => "Game Folder".to_string(),
             InstallTarget::RelativeToGame(rel) => format!("Game/{rel}"),
         }
     }
 }
 
-/// Remote mod entry in `catalog.json`.
+/// Remote plugin entry in `catalog.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModEntry {
     pub id: String,
@@ -66,7 +62,7 @@ pub struct ModCatalog {
     pub mods: Vec<ModEntry>,
 }
 
-/// Locally installed mod record.
+/// Locally installed plugin record.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstalledMod {
     pub id: String,
@@ -80,7 +76,7 @@ pub struct InstalledMod {
     pub install_target: InstallTarget,
     pub enabled: bool,
     pub staging_dir: PathBuf,
-    /// Exact file paths currently deployed into the target folder while enabled.
+    /// Exact file paths currently deployed into the game folder while enabled.
     #[serde(default)]
     pub deployed_files: Vec<PathBuf>,
 }
@@ -90,7 +86,6 @@ pub struct InstalledMod {
 pub struct LauncherConfig {
     pub catalog_url: String,
     pub game_dir: Option<PathBuf>,
-    pub data_dir: Option<PathBuf>,
 }
 
 impl Default for LauncherConfig {
@@ -98,7 +93,6 @@ impl Default for LauncherConfig {
         Self {
             catalog_url: DEFAULT_CATALOG_URL.to_string(),
             game_dir: None,
-            data_dir: None,
         }
     }
 }

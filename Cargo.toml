@@ -1,8 +1,8 @@
 [package]
-name = "ages-of-conflict-mod-launcher"
+name = "solanin"
 version = "0.1.0"
 edition = "2021"
-description = "A cross-platform mod launcher for Ages of Conflict: World War Simulator"
+description = "Solanin — a cross-platform plugin launcher for Ages of Conflict: World War Simulator"
 
 [dependencies]
 eframe = "0.29"

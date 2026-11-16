@@ -1,10 +1,22 @@
 use crate::catalog::{fetch_catalog, load_cached_catalog, load_state, save_state};
 use crate::mod_manager::{disable_mod, enable_mod, install_mod, uninstall_mod};
 use crate::models::{AppState, InstalledMod, ModCatalog, ModEntry, STEAM_APP_ID};
-use crate::paths::{detect_data_dir, detect_game_dir, LauncherPaths};
-use eframe::egui;
+use crate::paths::{detect_game_dir, LauncherPaths};
+use eframe::egui::{self, Color32, RichText, Rounding, Stroke};
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
+
+const BG_MAIN: Color32 = Color32::from_rgb(17, 19, 24);
+const BG_PANEL: Color32 = Color32::from_rgb(23, 26, 33);
+const BG_CARD: Color32 = Color32::from_rgb(30, 34, 43);
+const BG_CARD_SELECTED: Color32 = Color32::from_rgb(36, 44, 61);
+const BORDER_SUBTLE: Color32 = Color32::from_rgb(45, 50, 62);
+const TEXT_PRIMARY: Color32 = Color32::from_rgb(234, 237, 243);
+const TEXT_MUTED: Color32 = Color32::from_rgb(142, 150, 168);
+const ACCENT_BLUE: Color32 = Color32::from_rgb(59, 130, 246);
+const ACCENT_GREEN: Color32 = Color32::from_rgb(34, 197, 94);
+const ACCENT_AMBER: Color32 = Color32::from_rgb(245, 158, 11);
+const ACCENT_RED: Color32 = Color32::from_rgb(220, 38, 38);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Tab {
@@ -32,14 +44,63 @@ pub struct ModLauncherApp {
     busy: bool,
     tx: Sender<WorkerMsg>,
     rx: Receiver<WorkerMsg>,
-    // Editable settings buffers
     catalog_url_input: String,
     game_dir_input: String,
-    data_dir_input: String,
+}
+
+fn apply_theme(ctx: &egui::Context) {
+    let mut visuals = egui::Visuals::dark();
+    visuals.window_fill = BG_MAIN;
+    visuals.panel_fill = BG_PANEL;
+    visuals.extreme_bg_color = Color32::from_rgb(13, 15, 19);
+    visuals.faint_bg_color = BG_CARD;
+    visuals.override_text_color = Some(TEXT_PRIMARY);
+    visuals.selection.bg_fill = Color32::from_rgb(37, 99, 235);
+    visuals.selection.stroke = Stroke::new(1.0_f32, ACCENT_BLUE);
+
+    visuals.widgets.noninteractive.bg_fill = BG_CARD;
+    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, BORDER_SUBTLE);
+    visuals.widgets.noninteractive.rounding = Rounding::same(6.0);
+
+    visuals.widgets.inactive.bg_fill = Color32::from_rgb(38, 43, 54);
+    visuals.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, BORDER_SUBTLE);
+    visuals.widgets.inactive.rounding = Rounding::same(6.0);
+
+    visuals.widgets.hovered.bg_fill = Color32::from_rgb(49, 55, 70);
+    visuals.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, Color32::from_rgb(72, 80, 99));
+    visuals.widgets.hovered.rounding = Rounding::same(6.0);
+
+    visuals.widgets.active.bg_fill = ACCENT_BLUE;
+    visuals.widgets.active.rounding = Rounding::same(6.0);
+
+    ctx.set_visuals(visuals);
+
+    ctx.style_mut(|style| {
+        style.spacing.item_spacing = egui::vec2(10.0, 8.0);
+        style.spacing.button_padding = egui::vec2(14.0, 7.0);
+        style.spacing.window_margin = egui::Margin::same(14.0);
+    });
+}
+
+fn card_frame(selected: bool) -> egui::Frame {
+    egui::Frame::none()
+        .fill(if selected { BG_CARD_SELECTED } else { BG_CARD })
+        .stroke(Stroke::new(
+            1.0_f32,
+            if selected { ACCENT_BLUE } else { BORDER_SUBTLE },
+        ))
+        .rounding(Rounding::same(8.0))
+        .inner_margin(egui::Margin::symmetric(12.0, 10.0))
+}
+
+fn primary_button(label: &str, fill: Color32) -> egui::Button<'_> {
+    egui::Button::new(RichText::new(label).color(Color32::WHITE).strong()).fill(fill)
 }
 
 impl ModLauncherApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        apply_theme(&cc.egui_ctx);
+
         let paths = LauncherPaths::resolve().expect("Failed to resolve launcher data directory");
         let state = load_state(&paths);
         let catalog = load_cached_catalog(&paths).unwrap_or_default();
@@ -52,12 +113,8 @@ impl ModLauncherApp {
             .as_ref()
             .map(|p| p.display().to_string())
             .unwrap_or_default();
-        let data_dir_input = state
-            .config
-            .data_dir
-            .as_ref()
-            .map(|p| p.display().to_string())
-            .unwrap_or_default();
+
+        let selected_catalog_id = catalog.mods.first().map(|m| m.id.clone());
 
         let mut app = Self {
             paths,
@@ -65,20 +122,16 @@ impl ModLauncherApp {
             catalog,
             active_tab: Tab::Browse,
             search_query: String::new(),
-            selected_catalog_id: None,
-            status_message: "Ready.".to_string(),
+            selected_catalog_id,
+            status_message: "Ready".to_string(),
             busy: false,
             tx,
             rx,
             catalog_url_input,
             game_dir_input,
-            data_dir_input,
         };
 
-        // Persist auto-detected paths on first run.
         let _ = save_state(&app.paths, &app.state);
-
-        // Fetch latest catalog in the background on startup.
         app.trigger_fetch_catalog(cc.egui_ctx.clone());
         app
     }
@@ -88,7 +141,7 @@ impl ModLauncherApp {
             return;
         }
         self.busy = true;
-        self.status_message = "Fetching mod catalog...".to_string();
+        self.status_message = "Refreshing plugin list...".to_string();
         let url = self.state.config.catalog_url.clone();
         let data_dir = self.paths.data_dir.clone();
         let tx = self.tx.clone();
@@ -111,7 +164,7 @@ impl ModLauncherApp {
             return;
         }
         self.busy = true;
-        self.status_message = format!("Downloading & installing {}...", entry.name);
+        self.status_message = format!("Installing {}...", entry.name);
         let data_dir = self.paths.data_dir.clone();
         let config = self.state.config.clone();
         let existing = self.state.installed.get(&entry.id).cloned();
@@ -138,23 +191,20 @@ impl ModLauncherApp {
                 WorkerMsg::CatalogFetched(Ok(cat)) => {
                     let count = cat.mods.len();
                     self.catalog = cat;
-                    self.status_message = format!("Catalog updated ({count} mods).");
+                    self.status_message = format!("{count} plugins loaded");
                     if self.selected_catalog_id.is_none() {
                         self.selected_catalog_id = self.catalog.mods.first().map(|m| m.id.clone());
                     }
                 }
                 WorkerMsg::CatalogFetched(Err(err)) => {
-                    self.status_message = format!("Catalog fetch failed: {err}");
+                    self.status_message = format!("Could not refresh list: {err}");
                 }
                 WorkerMsg::ModInstalled { id, result } => match result {
                     Ok(installed) => {
                         let name = installed.name.clone();
                         self.state.installed.insert(id, installed);
-                        if let Err(e) = save_state(&self.paths, &self.state) {
-                            self.status_message = format!("Installed {name}, but failed to save state: {e}");
-                        } else {
-                            self.status_message = format!("Installed & enabled {name}.");
-                        }
+                        let _ = save_state(&self.paths, &self.state);
+                        self.status_message = format!("Installed {name}");
                     }
                     Err(err) => {
                         self.status_message = format!("Install failed: {err}");
@@ -178,7 +228,7 @@ impl ModLauncherApp {
             Ok(action) => {
                 let name = installed.name.clone();
                 let _ = save_state(&self.paths, &self.state);
-                self.status_message = format!("{action} {name}.");
+                self.status_message = format!("{action} {name}");
             }
             Err(err) => {
                 self.status_message = format!("Error: {err}");
@@ -191,7 +241,7 @@ impl ModLauncherApp {
             match uninstall_mod(&mut installed) {
                 Ok(()) => {
                     let _ = save_state(&self.paths, &self.state);
-                    self.status_message = format!("Uninstalled {}.", installed.name);
+                    self.status_message = format!("Uninstalled {}", installed.name);
                 }
                 Err(err) => {
                     self.state.installed.insert(id.to_string(), installed);
@@ -202,48 +252,78 @@ impl ModLauncherApp {
     }
 
     fn draw_top_bar(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
-            ui.add_space(4.0);
-            ui.horizontal(|ui| {
-                ui.heading("Ages of Conflict Mod Launcher");
-                ui.separator();
+        egui::TopBottomPanel::top("top_bar")
+            .frame(
+                egui::Frame::none()
+                    .fill(BG_PANEL)
+                    .inner_margin(egui::Margin::symmetric(16.0, 10.0)),
+            )
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Solanin").size(18.0).strong());
+                    ui.label(RichText::new("Ages of Conflict").size(13.0).color(TEXT_MUTED));
+                    ui.add_space(14.0);
 
-                ui.selectable_value(&mut self.active_tab, Tab::Browse, "Browse Mods");
-                ui.selectable_value(
-                    &mut self.active_tab,
-                    Tab::Installed,
-                    format!("Installed ({})", self.state.installed.len()),
-                );
-                ui.selectable_value(&mut self.active_tab, Tab::Settings, "Settings");
+                    self.nav_tab(ui, Tab::Browse, "Browse");
+                    self.nav_tab(
+                        ui,
+                        Tab::Installed,
+                        &format!("Installed ({})", self.state.installed.len()),
+                    );
+                    self.nav_tab(ui, Tab::Settings, "Settings");
 
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("Launch Game (Steam)").clicked() {
-                        let uri = format!("steam://rungameid/{STEAM_APP_ID}");
-                        if let Err(e) = open::that(&uri) {
-                            self.status_message = format!("Could not launch Steam: {e}");
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.add(primary_button("▶  Play", ACCENT_GREEN)).clicked() {
+                            let uri = format!("steam://rungameid/{STEAM_APP_ID}");
+                            if let Err(e) = open::that(&uri) {
+                                self.status_message = format!("Could not launch Steam: {e}");
+                            }
                         }
-                    }
-                    if ui
-                        .add_enabled(!self.busy, egui::Button::new("Refresh Catalog"))
-                        .clicked()
-                    {
-                        self.trigger_fetch_catalog(ctx.clone());
-                    }
+                        if ui
+                            .add_enabled(!self.busy, egui::Button::new("Refresh"))
+                            .clicked()
+                        {
+                            self.trigger_fetch_catalog(ctx.clone());
+                        }
+                    });
                 });
             });
-            ui.add_space(4.0);
-        });
+    }
+
+    fn nav_tab(&mut self, ui: &mut egui::Ui, tab: Tab, label: &str) {
+        let active = self.active_tab == tab;
+        let btn = egui::Button::new(
+            RichText::new(label)
+                .color(if active { Color32::WHITE } else { TEXT_MUTED })
+                .strong(),
+        )
+        .fill(if active {
+            ACCENT_BLUE
+        } else {
+            Color32::TRANSPARENT
+        })
+        .stroke(Stroke::NONE);
+
+        if ui.add(btn).clicked() {
+            self.active_tab = tab;
+        }
     }
 
     fn draw_status_bar(&self, ctx: &egui::Context) {
-        egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                if self.busy {
-                    ui.spinner();
-                }
-                ui.label(&self.status_message);
+        egui::TopBottomPanel::bottom("status_bar")
+            .frame(
+                egui::Frame::none()
+                    .fill(BG_PANEL)
+                    .inner_margin(egui::Margin::symmetric(16.0, 6.0)),
+            )
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    if self.busy {
+                        ui.spinner();
+                    }
+                    ui.label(RichText::new(&self.status_message).small().color(TEXT_MUTED));
+                });
             });
-        });
     }
 
     fn draw_browse_tab(&mut self, ctx: &egui::Context) {
@@ -263,241 +343,327 @@ impl ModLauncherApp {
             .collect();
 
         egui::SidePanel::left("browse_list")
-            .default_width(300.0)
+            .resizable(false)
+            .exact_width(300.0)
+            .frame(
+                egui::Frame::none()
+                    .fill(BG_MAIN)
+                    .inner_margin(egui::Margin::same(12.0)),
+            )
             .show(ctx, |ui| {
-                if let Some(ref msg) = self.catalog.announcement {
-                    if !msg.trim().is_empty() {
-                        ui.colored_label(egui::Color32::LIGHT_BLUE, msg);
-                        ui.separator();
-                    }
-                }
-
-                ui.horizontal(|ui| {
-                    ui.label("Search:");
-                    ui.text_edit_singleline(&mut self.search_query);
-                });
-                ui.separator();
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.search_query)
+                        .hint_text("Search plugins...")
+                        .desired_width(f32::INFINITY),
+                );
+                ui.add_space(6.0);
 
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     if filtered.is_empty() {
-                        ui.label("No mods found. Check your Catalog URL in Settings.");
+                        ui.add_space(16.0);
+                        ui.label(RichText::new("No plugins found.").color(TEXT_MUTED));
+                        return;
                     }
+
                     for m in &filtered {
                         let selected = self.selected_catalog_id.as_deref() == Some(&m.id);
                         let installed = self.state.installed.get(&m.id);
-                        let badge = match installed {
-                            Some(inst) if inst.version != m.version => " [Update]",
-                            Some(inst) if inst.enabled => " [Enabled]",
-                            Some(_) => " [Disabled]",
-                            None => "",
-                        };
-                        let label = format!("{}{}", m.name, badge);
-                        if ui.selectable_label(selected, label).clicked() {
+
+                        let resp = card_frame(selected)
+                            .show(ui, |ui| {
+                                ui.set_width(ui.available_width());
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new(&m.name).strong().size(14.0));
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| match installed {
+                                            Some(inst) if inst.version != m.version => {
+                                                ui.label(
+                                                    RichText::new("Update")
+                                                        .small()
+                                                        .color(ACCENT_AMBER),
+                                                );
+                                            }
+                                            Some(inst) if inst.enabled => {
+                                                ui.label(
+                                                    RichText::new("Enabled")
+                                                        .small()
+                                                        .color(ACCENT_GREEN),
+                                                );
+                                            }
+                                            Some(_) => {
+                                                ui.label(
+                                                    RichText::new("Disabled")
+                                                        .small()
+                                                        .color(TEXT_MUTED),
+                                                );
+                                            }
+                                            None => {}
+                                        },
+                                    );
+                                });
+                                let meta = if m.author.is_empty() {
+                                    format!("v{}", m.version)
+                                } else {
+                                    format!("v{}  ·  {}", m.version, m.author)
+                                };
+                                ui.label(RichText::new(meta).small().color(TEXT_MUTED));
+                            })
+                            .response
+                            .interact(egui::Sense::click());
+
+                        if resp.clicked() {
                             self.selected_catalog_id = Some(m.id.clone());
                         }
+                        ui.add_space(4.0);
                     }
                 });
             });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            let selected_mod = self
-                .selected_catalog_id
-                .as_ref()
-                .and_then(|id| self.catalog.mods.iter().find(|m| &m.id == id))
-                .cloned();
+        egui::CentralPanel::default()
+            .frame(
+                egui::Frame::none()
+                    .fill(BG_MAIN)
+                    .inner_margin(egui::Margin::symmetric(20.0, 16.0)),
+            )
+            .show(ctx, |ui| {
+                let selected_mod = self
+                    .selected_catalog_id
+                    .as_ref()
+                    .and_then(|id| self.catalog.mods.iter().find(|m| &m.id == id))
+                    .cloned();
 
-            let Some(m) = selected_mod else {
-                ui.centered_and_justified(|ui| {
-                    ui.label("Select a mod from the list to view its details.");
-                });
-                return;
-            };
-
-            ui.heading(&m.name);
-            ui.horizontal(|ui| {
-                ui.label(format!("v{}", m.version));
-                if !m.author.is_empty() {
-                    ui.separator();
-                    ui.label(format!("by {}", m.author));
-                }
-                ui.separator();
-                ui.label(format!("Target: {}", m.install_target.label()));
-            });
-
-            if !m.tags.is_empty() {
-                ui.horizontal_wrapped(|ui| {
-                    for tag in &m.tags {
-                        ui.small(format!("#{tag}"));
-                    }
-                });
-            }
-
-            ui.separator();
-
-            let installed = self.state.installed.get(&m.id).cloned();
-            ui.horizontal(|ui| match installed {
-                None => {
-                    if ui
-                        .add_enabled(!self.busy, egui::Button::new("Install Mod"))
-                        .clicked()
-                    {
-                        self.trigger_install_mod(m.clone(), ctx.clone());
-                    }
-                }
-                Some(inst) => {
-                    if inst.version != m.version
-                        && ui
-                            .add_enabled(
-                                !self.busy,
-                                egui::Button::new(format!("Update to v{}", m.version)),
-                            )
-                            .clicked()
-                    {
-                        self.trigger_install_mod(m.clone(), ctx.clone());
-                    }
-
-                    let toggle_text = if inst.enabled { "Disable" } else { "Enable" };
-                    if ui.button(toggle_text).clicked() {
-                        self.toggle_mod_enabled(&m.id);
-                    }
-
-                    if ui.button("Uninstall").clicked() {
-                        self.handle_uninstall(&m.id);
-                    }
-                }
-            });
-
-            ui.separator();
-
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                if !m.summary.is_empty() {
-                    ui.strong(&m.summary);
-                    ui.add_space(6.0);
-                }
-                let desc = if m.description.is_empty() {
-                    "No description provided."
-                } else {
-                    &m.description
+                let Some(m) = selected_mod else {
+                    ui.centered_and_justified(|ui| {
+                        ui.label(RichText::new("Select a plugin to view details.").color(TEXT_MUTED));
+                    });
+                    return;
                 };
-                ui.label(desc);
+
+                card_frame(false).show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            ui.label(RichText::new(&m.name).size(22.0).strong());
+                            let sub = if m.author.is_empty() {
+                                format!("v{}  ·  {}", m.version, m.install_target.label())
+                            } else {
+                                format!(
+                                    "v{}  ·  by {}  ·  {}",
+                                    m.version,
+                                    m.author,
+                                    m.install_target.label()
+                                )
+                            };
+                            ui.label(RichText::new(sub).color(TEXT_MUTED));
+                        });
+
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let installed = self.state.installed.get(&m.id).cloned();
+                            match installed {
+                                None => {
+                                    if ui
+                                        .add_enabled(!self.busy, primary_button("Install", ACCENT_BLUE))
+                                        .clicked()
+                                    {
+                                        self.trigger_install_mod(m.clone(), ctx.clone());
+                                    }
+                                }
+                                Some(inst) => {
+                                    if ui.add(primary_button("Uninstall", ACCENT_RED)).clicked() {
+                                        self.handle_uninstall(&m.id);
+                                    }
+
+                                    let (toggle_lbl, toggle_col) = if inst.enabled {
+                                        ("Disable", Color32::from_rgb(55, 62, 78))
+                                    } else {
+                                        ("Enable", ACCENT_GREEN)
+                                    };
+                                    if ui.add(primary_button(toggle_lbl, toggle_col)).clicked() {
+                                        self.toggle_mod_enabled(&m.id);
+                                    }
+
+                                    if inst.version != m.version
+                                        && ui
+                                            .add_enabled(
+                                                !self.busy,
+                                                primary_button("Update", ACCENT_AMBER),
+                                            )
+                                            .clicked()
+                                    {
+                                        self.trigger_install_mod(m.clone(), ctx.clone());
+                                    }
+                                }
+                            }
+                        });
+                    });
+
+                    if !m.tags.is_empty() {
+                        ui.add_space(6.0);
+                        ui.horizontal_wrapped(|ui| {
+                            for tag in &m.tags {
+                                egui::Frame::none()
+                                    .fill(Color32::from_rgb(38, 43, 56))
+                                    .rounding(Rounding::same(4.0))
+                                    .inner_margin(egui::Margin::symmetric(8.0, 3.0))
+                                    .show(ui, |ui| {
+                                        ui.label(RichText::new(tag).small().color(TEXT_MUTED));
+                                    });
+                            }
+                        });
+                    }
+                });
+
+                ui.add_space(12.0);
+
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    if !m.summary.is_empty() {
+                        ui.label(RichText::new(&m.summary).size(15.0).strong());
+                        ui.add_space(8.0);
+                    }
+                    let desc = if m.description.is_empty() {
+                        "No description provided."
+                    } else {
+                        &m.description
+                    };
+                    ui.label(RichText::new(desc).size(14.0).color(TEXT_PRIMARY));
+                });
             });
-        });
     }
 
     fn draw_installed_tab(&mut self, ctx: &egui::Context) {
         let installed_ids: Vec<String> = self.state.installed.keys().cloned().collect();
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Installed Mods");
-            ui.separator();
+        egui::CentralPanel::default()
+            .frame(
+                egui::Frame::none()
+                    .fill(BG_MAIN)
+                    .inner_margin(egui::Margin::symmetric(24.0, 18.0)),
+            )
+            .show(ctx, |ui| {
+                ui.label(RichText::new("Installed Plugins").size(20.0).strong());
+                ui.add_space(8.0);
 
-            if installed_ids.is_empty() {
-                ui.label("No mods installed yet. Go to Browse Mods to install some!");
-                return;
-            }
-
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                for id in installed_ids {
-                    let Some(inst) = self.state.installed.get(&id).cloned() else {
-                        continue;
-                    };
-                    ui.group(|ui| {
-                        ui.horizontal(|ui| {
-                            let mut enabled = inst.enabled;
-                            if ui.checkbox(&mut enabled, "").changed() {
-                                self.toggle_mod_enabled(&id);
-                            }
-
-                            ui.vertical(|ui| {
-                                ui.strong(format!("{} (v{})", inst.name, inst.version));
-                                ui.small(format!(
-                                    "Status: {} | Target: {} | Files: {}",
-                                    if inst.enabled { "Enabled" } else { "Disabled" },
-                                    inst.install_target.label(),
-                                    inst.deployed_files.len()
-                                ));
-                            });
-
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    if ui.button("Uninstall").clicked() {
-                                        self.handle_uninstall(&id);
-                                    }
-                                    if ui.button("Open Folder").clicked() {
-                                        let _ = open::that(&inst.staging_dir);
-                                    }
-                                },
-                            );
-                        });
-                    });
-                    ui.add_space(4.0);
+                if installed_ids.is_empty() {
+                    ui.label(
+                        RichText::new("No plugins installed yet. Head to Browse to install one.")
+                            .color(TEXT_MUTED),
+                    );
+                    return;
                 }
+
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    for id in installed_ids {
+                        let Some(inst) = self.state.installed.get(&id).cloned() else {
+                            continue;
+                        };
+                        card_frame(false).show(ui, |ui| {
+                            ui.set_width(ui.available_width());
+                            ui.horizontal(|ui| {
+                                ui.vertical(|ui| {
+                                    ui.label(
+                                        RichText::new(format!("{}  v{}", inst.name, inst.version))
+                                            .size(15.0)
+                                            .strong(),
+                                    );
+                                    let status_txt = if inst.enabled {
+                                        format!("Enabled  ·  {} files", inst.deployed_files.len())
+                                    } else {
+                                        "Disabled".to_string()
+                                    };
+                                    ui.label(RichText::new(status_txt).small().color(TEXT_MUTED));
+                                });
+
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        if ui.add(primary_button("Uninstall", ACCENT_RED)).clicked()
+                                        {
+                                            self.handle_uninstall(&id);
+                                        }
+                                        if ui.button("Folder").clicked() {
+                                            let _ = open::that(&inst.staging_dir);
+                                        }
+                                        let (lbl, col) = if inst.enabled {
+                                            ("Enabled", ACCENT_GREEN)
+                                        } else {
+                                            ("Disabled", Color32::from_rgb(55, 62, 78))
+                                        };
+                                        if ui.add(primary_button(lbl, col)).clicked() {
+                                            self.toggle_mod_enabled(&id);
+                                        }
+                                    },
+                                );
+                            });
+                        });
+                        ui.add_space(6.0);
+                    }
+                });
             });
-        });
     }
 
     fn draw_settings_tab(&mut self, ctx: &egui::Context) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Launcher Settings");
-            ui.separator();
+        egui::CentralPanel::default()
+            .frame(
+                egui::Frame::none()
+                    .fill(BG_MAIN)
+                    .inner_margin(egui::Margin::symmetric(24.0, 18.0)),
+            )
+            .show(ctx, |ui| {
+                ui.set_max_width(640.0);
+                ui.label(RichText::new("Settings").size(20.0).strong());
+                ui.add_space(10.0);
 
-            ui.label("Mod Catalog URL (raw catalog.json URL or local file path):");
-            ui.text_edit_singleline(&mut self.catalog_url_input);
-            ui.add_space(8.0);
+                card_frame(false).show(ui, |ui| {
+                    ui.set_width(ui.available_width());
 
-            ui.label("Ages of Conflict Steam Install Directory:");
-            ui.horizontal(|ui| {
-                ui.text_edit_singleline(&mut self.game_dir_input);
-                if ui.button("Auto-Detect").clicked() {
-                    if let Some(p) = detect_game_dir() {
-                        self.game_dir_input = p.display().to_string();
-                        self.status_message = "Detected game install directory.".to_string();
-                    } else {
-                        self.status_message = "Could not auto-detect game install directory.".to_string();
-                    }
-                }
+                    ui.label(RichText::new("Plugin Catalog URL").strong());
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.catalog_url_input)
+                            .desired_width(f32::INFINITY),
+                    );
+                    ui.add_space(10.0);
+
+                    ui.label(RichText::new("Ages of Conflict Game Folder").strong());
+                    ui.horizontal(|ui| {
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.game_dir_input)
+                                .desired_width(ui.available_width() - 120.0),
+                        );
+                        if ui.button("Auto-Detect").clicked() {
+                            if let Some(p) = detect_game_dir() {
+                                self.game_dir_input = p.display().to_string();
+                                self.status_message = "Detected game folder".to_string();
+                            } else {
+                                self.status_message = "Could not find game folder".to_string();
+                            }
+                        }
+                    });
+                    ui.add_space(14.0);
+
+                    ui.horizontal(|ui| {
+                        if ui.add(primary_button("Save Settings", ACCENT_BLUE)).clicked() {
+                            self.state.config.catalog_url =
+                                self.catalog_url_input.trim().to_string();
+                            self.state.config.game_dir = if self.game_dir_input.trim().is_empty() {
+                                None
+                            } else {
+                                Some(PathBuf::from(self.game_dir_input.trim()))
+                            };
+                            match save_state(&self.paths, &self.state) {
+                                Ok(()) => self.status_message = "Settings saved".to_string(),
+                                Err(e) => {
+                                    self.status_message = format!("Failed to save settings: {e}")
+                                }
+                            }
+                        }
+
+                        if ui.button("Open Launcher Data").clicked() {
+                            let _ = open::that(&self.paths.data_dir);
+                        }
+                    });
+                });
             });
-            ui.add_space(8.0);
-
-            ui.label("Ages of Conflict Data Directory (Custom Maps / Custom Scenarios):");
-            ui.horizontal(|ui| {
-                ui.text_edit_singleline(&mut self.data_dir_input);
-                if ui.button("Auto-Detect").clicked() {
-                    if let Some(p) = detect_data_dir() {
-                        self.data_dir_input = p.display().to_string();
-                        self.status_message = "Detected game data directory.".to_string();
-                    } else {
-                        self.status_message = "Could not auto-detect game data directory.".to_string();
-                    }
-                }
-            });
-            ui.add_space(12.0);
-
-            ui.horizontal(|ui| {
-                if ui.button("Save Settings").clicked() {
-                    self.state.config.catalog_url = self.catalog_url_input.trim().to_string();
-                    self.state.config.game_dir = if self.game_dir_input.trim().is_empty() {
-                        None
-                    } else {
-                        Some(PathBuf::from(self.game_dir_input.trim()))
-                    };
-                    self.state.config.data_dir = if self.data_dir_input.trim().is_empty() {
-                        None
-                    } else {
-                        Some(PathBuf::from(self.data_dir_input.trim()))
-                    };
-                    match save_state(&self.paths, &self.state) {
-                        Ok(()) => self.status_message = "Settings saved.".to_string(),
-                        Err(e) => self.status_message = format!("Failed to save settings: {e}"),
-                    }
-                }
-
-                if ui.button("Open Launcher Data Folder").clicked() {
-                    let _ = open::that(&self.paths.data_dir);
-                }
-            });
-        });
     }
 }
 

@@ -1,18 +1,18 @@
 {
-  "name": "Ages of Conflict Mod Catalog",
-  "announcement": "Welcome! Select a mod on the left to read its description and install it.",
+  "name": "Ages of Conflict Plugins",
+  "announcement": null,
   "mods": [
     {
-      "id": "example-europe-1936",
-      "name": "Europe 1936 Scenario",
+      "id": "example-plugin",
+      "name": "Example Plugin",
       "version": "1.0.0",
-      "author": "YourName",
-      "summary": "A custom historical 1936 Europe scenario.",
-      "description": "Includes custom borders, starting alliances, and balanced city populations for 1936 Europe.\n\nReplace this entry using the web editor in web/index.html!",
-      "download_url": "https://example.com/mods/europe-1936.zip",
+      "author": "omarxi",
+      "summary": "A sample BepInEx plugin for Ages of Conflict.",
+      "description": "Replace this entry using your local web/index.html manager and publish it to GitHub.",
+      "download_url": "https://example.com/mods/example-plugin.zip",
       "sha256": null,
-      "install_target": "custom_scenarios",
-      "tags": ["historical", "europe", "scenario"],
+      "install_target": "bepinex_plugins",
+      "tags": ["qol", "plugin"],
       "updated_at": "2026-11-16"
     }
   ]

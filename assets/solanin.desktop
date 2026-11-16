@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Solanin
+Comment=Plugin launcher for Ages of Conflict
+Exec=solanin
+Icon=solanin
+Categories=Game;
+Terminal=false

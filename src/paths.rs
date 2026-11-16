@@ -1,8 +1,6 @@
-#[cfg(target_os = "linux")]
-use crate::models::STEAM_APP_ID;
-use crate::models::{InstallTarget, LauncherConfig};
+use crate::models::{InstallTarget, LauncherConfig, STEAM_APP_ID};
 use directories::{BaseDirs, ProjectDirs};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub struct LauncherPaths {
     pub data_dir: PathBuf,
@@ -13,10 +11,10 @@ pub struct LauncherPaths {
 
 impl LauncherPaths {
     pub fn resolve() -> Result<Self, String> {
-        let proj = ProjectDirs::from("com", "AgesOfConflict", "ModLauncher")
+        let proj = ProjectDirs::from("com", "Solanin", "Solanin")
             .ok_or_else(|| "Could not determine application data directory".to_string())?;
         let data_dir = proj.data_local_dir().to_path_buf();
-        let staging_root = data_dir.join("mods");
+        let staging_root = data_dir.join("plugins");
         std::fs::create_dir_all(&staging_root)
             .map_err(|e| format!("Failed to create launcher directory: {e}"))?;
 
@@ -29,69 +27,98 @@ impl LauncherPaths {
     }
 }
 
+/// Extracts the quoted value for a VDF key like `"path"  "/some/dir"` or `"installdir"  "Name"`.
+fn extract_vdf_values(content: &str, key: &str) -> Vec<String> {
+    let mut results = Vec::new();
+    let needle = format!("\"{key}\"");
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix(&needle) {
+            let rest = rest.trim();
+            if let Some(inner) = rest.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
+                let unescaped = inner.replace("\\\\", "\\");
+                if !unescaped.is_empty() {
+                    results.push(unescaped);
+                }
+            }
+        }
+    }
+    results
+}
+
+fn find_in_steam_library(lib_root: &Path) -> Option<PathBuf> {
+    let steamapps = lib_root.join("steamapps");
+    let manifest = steamapps.join(format!("appmanifest_{STEAM_APP_ID}.acf"));
+    if let Ok(content) = std::fs::read_to_string(&manifest) {
+        for install_dir in extract_vdf_values(&content, "installdir") {
+            let candidate = steamapps.join("common").join(install_dir);
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    for folder in [
+        "Ages of Conflict World War Simulator",
+        "Ages of Conflict",
+    ] {
+        let candidate = steamapps.join("common").join(folder);
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
+
 /// Attempts to locate the Steam installation folder for Ages of Conflict.
 pub fn detect_game_dir() -> Option<PathBuf> {
-    let mut candidates = Vec::new();
+    let mut steam_roots = Vec::new();
 
     #[cfg(target_os = "windows")]
     {
         if let Ok(pf86) = std::env::var("ProgramFiles(x86)") {
-            candidates.push(PathBuf::from(pf86).join("Steam/steamapps/common/Ages of Conflict"));
+            steam_roots.push(PathBuf::from(pf86).join("Steam"));
         }
         if let Ok(pf) = std::env::var("ProgramFiles") {
-            candidates.push(PathBuf::from(pf).join("Steam/steamapps/common/Ages of Conflict"));
+            steam_roots.push(PathBuf::from(pf).join("Steam"));
         }
         for drive in ["C:", "D:", "E:", "F:"] {
-            candidates.push(PathBuf::from(format!(
-                "{drive}\\SteamLibrary\\steamapps\\common\\Ages of Conflict"
-            )));
+            steam_roots.push(PathBuf::from(format!("{drive}\\SteamLibrary")));
+            steam_roots.push(PathBuf::from(format!("{drive}\\Program Files (x86)\\Steam")));
         }
     }
 
     #[cfg(target_os = "linux")]
     if let Some(base) = BaseDirs::new() {
         let home = base.home_dir();
-        candidates.push(home.join(".local/share/Steam/steamapps/common/Ages of Conflict"));
-        candidates.push(home.join(".steam/steam/steamapps/common/Ages of Conflict"));
-        candidates.push(
-            home.join(".var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/common/Ages of Conflict"),
-        );
+        steam_roots.push(home.join(".local/share/Steam"));
+        steam_roots.push(home.join(".steam/steam"));
+        steam_roots.push(home.join(".steam/root"));
+        steam_roots.push(home.join(".var/app/com.valvesoftware.Steam/.local/share/Steam"));
     }
 
-    candidates.into_iter().find(|p| p.exists())
-}
+    let mut libraries = Vec::new();
+    for root in steam_roots {
+        if !root.exists() {
+            continue;
+        }
+        let vdf = root.join("steamapps").join("libraryfolders.vdf");
+        if let Ok(content) = std::fs::read_to_string(&vdf) {
+            for lib_path in extract_vdf_values(&content, "path") {
+                libraries.push(PathBuf::from(lib_path));
+            }
+        }
+        libraries.push(root);
+    }
 
-/// Attempts to locate the Unity LocalLow/unity3d folder for JoySparkGames/Ages of Conflict.
-pub fn detect_data_dir() -> Option<PathBuf> {
-    let mut candidates = Vec::new();
-
-    #[cfg(target_os = "windows")]
-    if let Some(base) = BaseDirs::new() {
-        if let Some(local_app_data) = base.data_local_dir().parent() {
-            candidates.push(
-                local_app_data
-                    .join("LocalLow")
-                    .join("JoySparkGames")
-                    .join("Ages of Conflict"),
-            );
+    for lib in libraries {
+        if let Some(found) = find_in_steam_library(&lib) {
+            return Some(found);
         }
     }
 
-    #[cfg(target_os = "linux")]
-    if let Some(base) = BaseDirs::new() {
-        let home = base.home_dir();
-        // Native Unity path
-        candidates.push(home.join(".config/unity3d/JoySparkGames/Ages of Conflict"));
-        // Steam Proton compatdata path
-        candidates.push(home.join(format!(
-            ".local/share/Steam/steamapps/compatdata/{STEAM_APP_ID}/pfx/drive_c/users/steamuser/AppData/LocalLow/JoySparkGames/Ages of Conflict"
-        )));
-        candidates.push(home.join(format!(
-            ".var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/compatdata/{STEAM_APP_ID}/pfx/drive_c/users/steamuser/AppData/LocalLow/JoySparkGames/Ages of Conflict"
-        )));
-    }
-
-    candidates.into_iter().find(|p| p.exists())
+    None
 }
 
 /// Resolves the destination directory for a given `InstallTarget`.
@@ -99,41 +126,14 @@ pub fn resolve_target_dir(
     target: &InstallTarget,
     config: &LauncherConfig,
 ) -> Result<PathBuf, String> {
+    let game = config
+        .game_dir
+        .as_ref()
+        .ok_or_else(|| "Ages of Conflict folder is not set (check Settings)".to_string())?;
+
     match target {
-        InstallTarget::CustomMaps => {
-            let data = config
-                .data_dir
-                .as_ref()
-                .ok_or_else(|| "Game Data Directory is not configured (check Settings)".to_string())?;
-            Ok(data.join("Custom Maps"))
-        }
-        InstallTarget::CustomScenarios => {
-            let data = config
-                .data_dir
-                .as_ref()
-                .ok_or_else(|| "Game Data Directory is not configured (check Settings)".to_string())?;
-            Ok(data.join("Custom Scenarios"))
-        }
-        InstallTarget::GameDir => {
-            let game = config
-                .game_dir
-                .as_ref()
-                .ok_or_else(|| "Game Install Directory is not configured (check Settings)".to_string())?;
-            Ok(game.clone())
-        }
-        InstallTarget::BepInExPlugins => {
-            let game = config
-                .game_dir
-                .as_ref()
-                .ok_or_else(|| "Game Install Directory is not configured (check Settings)".to_string())?;
-            Ok(game.join("BepInEx").join("plugins"))
-        }
-        InstallTarget::RelativeToGame(rel) => {
-            let game = config
-                .game_dir
-                .as_ref()
-                .ok_or_else(|| "Game Install Directory is not configured (check Settings)".to_string())?;
-            Ok(game.join(rel))
-        }
+        InstallTarget::BepInExPlugins => Ok(game.join("BepInEx").join("plugins")),
+        InstallTarget::GameDir => Ok(game.clone()),
+        InstallTarget::RelativeToGame(rel) => Ok(game.join(rel)),
     }
 }

@@ -115,22 +115,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
-name = "ages-of-conflict-mod-launcher"
-version = "0.1.0"
-dependencies = [
- "directories",
- "eframe",
- "hex",
- "open",
- "reqwest",
- "serde",
- "serde_json",
- "sha2",
- "walkdir",
- "zip",
-]
-
-[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3280,6 +3264,22 @@ checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "solanin"
+version = "0.1.0"
+dependencies = [
+ "directories",
+ "eframe",
+ "hex",
+ "open",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "walkdir",
+ "zip",
 ]
 
 [[package]]
