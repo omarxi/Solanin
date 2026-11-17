@@ -17,9 +17,9 @@
       "image_url": null,
       "previews": [
         "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/skeptics1.png",
-        "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/skeptics2.png",
         "https://youtu.be/3Et3nGdgPHU",
-        "https://youtu.be/GNEBVRTZb8s"
+        "https://youtu.be/GNEBVRTZb8s",
+        "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/image9.png"
       ],
       "instructions": "open menu by clicking \".\""
     },
@@ -160,6 +160,49 @@
       "download_url": "https://raw.githubusercontent.com/omarxi/solanin/main/mods/atharvsWarGoals.dll",
       "icon_url": "https://raw.githubusercontent.com/omarxi/solanin/main/mods/icons/Logo.png",
       "previews": [],
+      "image_url": null,
+      "video_url": null,
+      "sha256": null,
+      "install_target": "bepinex_plugins",
+      "tags": [],
+      "updated_at": "2026-11-17",
+      "changelog": []
+    },
+    {
+      "id": "Taboritskys-Revolutions",
+      "name": "Taboritsky's Revolutions+",
+      "version": "2.0.0",
+      "author": "Taboritsky",
+      "summary": "Adds coups, revolutions, focus trees, civil wars, and post-victory objectives—overthrow any government on any map and remake the country.",
+      "description": "Overthrow any government, on any map. Build a movement, fight the regime, and remake the country under a new name, flag, and government.\n\nFeatures:\n• Manual & Automatic Coups: Spend political capital on 10 actions across 6 stages while the government fights back.\n• Country-Specific Factions: Custom movements for Russia, USA, China, UK, Germany, and more, plus era-appropriate movements for every other country.\n• Unique Coups with Focus Trees: Includes Wagner Group, Holy Russian Empire, Operation Valkyrie, Union of Britain, and Illyrian Revival.\n• Battle for the Capital: The final move of a coup plays out live on the map.\n• Civil War & Collapse: The government fights its rivals, or the state splits apart while neighbors seize territory.\n• Fund Coups Abroad: Back movements in other countries to spread your ideology.\n• Post-Victory Objectives: Ranges from regional goals up to Very Hard world domination.\n• Extras & Tools: Custom faction editor, popularity map, government history, and an in-game FAQ.\n\n⚠️ Note: Works even WITHOUT the in-game revolution option enabled.",
+      "instructions": "",
+      "download_url": "https://raw.githubusercontent.com/omarxi/solanin/main/mods/TaboritskysRevolutionsPlus.dll",
+      "icon_url": null,
+      "previews": [
+        "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/image6.png",
+        "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/image7.png"
+      ],
+      "image_url": null,
+      "video_url": null,
+      "sha256": null,
+      "install_target": "bepinex_plugins",
+      "tags": [],
+      "updated_at": "2026-11-17",
+      "changelog": []
+    },
+    {
+      "id": "flag-map",
+      "name": "atharv's ONLY Flag Map",
+      "version": "1.0.0",
+      "author": "atharv_asgola",
+      "summary": "",
+      "description": "",
+      "instructions": " Some settings are available, which you can access by using Ctrl + F.",
+      "download_url": "https://raw.githubusercontent.com/omarxi/solanin/main/mods/atharvsONLYFlagMap.dll",
+      "icon_url": null,
+      "previews": [
+        "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/image21.png"
+      ],
       "image_url": null,
       "video_url": null,
       "sha256": null,
