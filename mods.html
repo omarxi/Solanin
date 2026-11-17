@@ -215,6 +215,9 @@
           <label style="font-size:0.84rem; color:var(--muted);">Preview Images (up to 4, unlocked for your account)</label>
           <input type="file" name="previews" accept="image/*" multiple style="color:var(--text);" />
         </div>
+        <label id="submitOfficialWrap" style="display:none; font-size:0.88rem; color:var(--blue); align-items:center; gap:8px;">
+          <input type="checkbox" id="submitAsOfficial" /> Publish as Official Mod (up to 25 MB)
+        </label>
         <div id="submitStatus" style="font-size:0.86rem; color:var(--muted);"></div>
         <button class="btn primary" id="submitFormBtn" type="submit">Scan with VirusTotal &amp; Submit</button>
       </form>
@@ -285,20 +288,21 @@
     let supabaseAnonKey = "";
     let sbClient = null;
     let currentSession = null;
-    let userPerms = { can_upload_images: false, assigned_official_mod_ids: [] };
+    let userPerms = { can_upload_images: false, can_publish_official: false, assigned_official_mod_ids: [] };
 
     async function loadUserPermissions() {
-      userPerms = { can_upload_images: false, assigned_official_mod_ids: [] };
+      userPerms = { can_upload_images: false, can_publish_official: false, assigned_official_mod_ids: [] };
       if (!sbClient || !currentSession?.user) return;
       try {
         const { data } = await sbClient
           .from("user_permissions")
-          .select("can_upload_images, assigned_official_mod_ids")
+          .select("can_upload_images, can_publish_official, assigned_official_mod_ids")
           .eq("user_id", currentSession.user.id)
           .maybeSingle();
         if (data) {
           userPerms = {
             can_upload_images: Boolean(data.can_upload_images),
+            can_publish_official: Boolean(data.can_publish_official),
             assigned_official_mod_ids: Array.isArray(data.assigned_official_mod_ids)
               ? data.assigned_official_mod_ids
               : []
@@ -306,7 +310,9 @@
         }
       } catch (_) {}
       const wrap = document.getElementById("submitPreviewWrap");
-      if (wrap) wrap.style.display = userPerms.can_upload_images ? "flex" : "none";
+      if (wrap) wrap.style.display = (userPerms.can_upload_images || userPerms.can_publish_official) ? "flex" : "none";
+      const offWrap = document.getElementById("submitOfficialWrap");
+      if (offWrap) offWrap.style.display = userPerms.can_publish_official ? "flex" : "none";
     }
 
     async function updateAuthUI() {
@@ -399,7 +405,7 @@
             const rows = await sbRes.json();
             for (const r of rows) {
               if (!mods.some((m) => m.id === r.id)) {
-                mods.push({ ...r, user_submitted: true });
+                mods.push({ ...r, user_submitted: !r.is_official });
               }
             }
           }
@@ -566,7 +572,7 @@
       const mine = mods
         .map((m, idx) => ({ m, idx }))
         .filter(({ m }) =>
-          (m.user_submitted && m.owner_id === currentSession.user.id) ||
+          m.owner_id === currentSession.user.id ||
           (!m.user_submitted && userPerms.assigned_official_mod_ids.includes(m.id))
         );
       if (!mine.length) {
@@ -667,12 +673,15 @@
 
       try {
         if (!currentSession?.access_token) throw new Error("Please sign in first.");
+        const asOfficial = Boolean(document.getElementById("submitAsOfficial")?.checked);
+        const maxBytes = (asOfficial ? 25 : 5) * 1024 * 1024;
         const file = form.file?.files?.[0];
-        if (file && file.size > 5 * 1024 * 1024) {
-          throw new Error("File is larger than the 5 MB limit.");
+        if (file && file.size > maxBytes) {
+          throw new Error(`File is larger than the ${asOfficial ? 25 : 5} MB limit.`);
         }
         const fd = new FormData(form);
         fd.append("action", "create");
+        fd.append("as_official", asOfficial ? "true" : "false");
         const res = await fetch(`${supabaseUrl}/functions/v1/submit-mod`, {
           method: "POST",
           headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${currentSession.access_token}` },

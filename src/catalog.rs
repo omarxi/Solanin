@@ -39,6 +39,8 @@ struct CommunityModRow {
     virustotal_url: Option<String>,
     #[serde(default)]
     changelog: Vec<ReleaseNote>,
+    #[serde(default)]
+    is_official: bool,
 }
 
 pub fn load_state(paths: &LauncherPaths) -> AppState {
@@ -180,7 +182,7 @@ pub fn fetch_catalog(url: &str, paths: &LauncherPaths) -> Result<ModCatalog, Str
                                         tags: vec!["community".to_string()],
                                         updated_at: String::new(),
                                         changelog: r.changelog,
-                                        user_submitted: true,
+                                        user_submitted: !r.is_official,
                                         virustotal_url: r.virustotal_url,
                                     });
                                 }
