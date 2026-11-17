@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Browse Mods — Solanin</title>
   <link rel="icon" type="image/png" href="assets/icon.png" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
       --bg: #111318;
@@ -163,6 +164,9 @@
       <div class="toolbar-right">
         <button class="btn small active" id="vGrid" onclick="setView('grid')">Grid</button>
         <button class="btn small" id="vList" onclick="setView('list')">List</button>
+        <button class="btn small" id="authBtn" style="display:none;" onclick="openAuthModal()">Sign In</button>
+        <span id="userLabel" style="display:none; font-size:0.84rem; color:var(--muted);"></span>
+        <button class="btn small" id="signOutBtn" style="display:none;" onclick="signOut()">Sign Out</button>
         <button class="btn primary small" id="submitBtn" style="display:none;" onclick="openSubmitModal()">+ Submit a Mod</button>
       </div>
     </div>
@@ -220,7 +224,6 @@
       </div>
       <form id="updateForm" onsubmit="submitModUpdate(event)" style="display:flex; flex-direction:column; gap:10px;">
         <input type="hidden" name="mod_id" id="updModId" />
-        <input class="search" style="width:100%;" name="update_key" placeholder="Your Update Key *" required />
         <input class="search" style="width:100%;" name="version" id="updVersion" placeholder="New Version (e.g. 1.1.0) *" required />
         <textarea class="search" style="width:100%; min-height:85px; font-family:inherit;" name="notes" placeholder="What's changed / hotfixes"></textarea>
         <label style="font-size:0.84rem; color:var(--muted);">New Mod File (.dll or .zip, max 5 MB) *</label>
@@ -231,12 +234,54 @@
     </div>
   </div>
 
+  <!-- Auth Modal -->
+  <div class="backdrop" id="authBackdrop" onclick="if (event.target === this) closeModal('authBackdrop')">
+    <div class="modal" style="max-width: 420px;">
+      <div class="modal-head">
+        <h3>Sign In / Create Account</h3>
+        <button class="close-btn" onclick="closeModal('authBackdrop')">Close</button>
+      </div>
+      <p style="margin-top:0; color:var(--muted); font-size:0.86rem;">
+        Sign in to submit community mods and release updates for your own mods.
+      </p>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <input class="search" style="width:100%;" id="authEmail" type="email" placeholder="Email *" />
+        <input class="search" style="width:100%;" id="authPassword" type="password" placeholder="Password (min 6 chars) *" />
+        <div id="authStatus" style="font-size:0.85rem; color:var(--muted);"></div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn primary" style="flex:1;" onclick="doAuth('signin')">Sign In</button>
+          <button class="btn" style="flex:1;" onclick="doAuth('signup')">Sign Up</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     let mods = [];
     let filterMode = "all";
     let viewMode = "grid";
     let supabaseUrl = "";
     let supabaseAnonKey = "";
+    let sbClient = null;
+    let currentSession = null;
+
+    function updateAuthUI() {
+      const authBtn = document.getElementById("authBtn");
+      const userLabel = document.getElementById("userLabel");
+      const signOutBtn = document.getElementById("signOutBtn");
+      if (!sbClient) return;
+      if (currentSession?.user) {
+        authBtn.style.display = "none";
+        userLabel.style.display = "inline";
+        userLabel.textContent = currentSession.user.email || "Signed in";
+        signOutBtn.style.display = "inline-flex";
+      } else {
+        authBtn.style.display = "inline-flex";
+        userLabel.style.display = "none";
+        signOutBtn.style.display = "none";
+      }
+      renderMods();
+    }
 
     async function loadCatalog() {
       const urls = [
@@ -263,7 +308,6 @@
       supabaseAnonKey = (baseData.supabase_anon_key || "").trim();
 
       if (supabaseUrl && supabaseAnonKey) {
-        document.getElementById("submitBtn").style.display = "inline-flex";
         try {
           const sbRes = await fetch(
             `${supabaseUrl}/rest/v1/community_mods?select=*&order=created_at.desc`,
@@ -358,7 +402,10 @@
             </div>
             <div class="mod-actions">
               ${m.user_submitted && m.virustotal_url ? `<a class="btn small" href="${escapeAttr(m.virustotal_url)}" target="_blank" rel="noopener">VirusTotal</a>` : ""}
-              ${m.user_submitted ? `<button class="btn small" onclick="openUpdateModal(${idx})">Release Update</button>` : ""}
+              ${m.user_submitted && currentSession?.user && m.owner_id === currentSession.user.id ? `
+                <button class="btn small" onclick="openUpdateModal(${idx})">Release Update</button>
+                <button class="btn small" style="border-color:#ef4444; color:#f87171;" onclick="deleteOwnMod(${idx})">Delete</button>
+              ` : ""}
               <button class="btn small" onclick="openDetail(${idx})">Details</button>
               <button class="btn small primary" onclick="promptInstall(${idx})">Install</button>
             </div>
@@ -438,7 +485,49 @@
       document.getElementById("installBackdrop").classList.add("open");
     }
 
+    function openAuthModal() {
+      document.getElementById("authStatus").textContent = "";
+      document.getElementById("authBackdrop").classList.add("open");
+    }
+
+    async function doAuth(mode) {
+      if (!sbClient) return;
+      const email = document.getElementById("authEmail").value.trim();
+      const password = document.getElementById("authPassword").value;
+      const st = document.getElementById("authStatus");
+      st.style.color = "var(--muted)";
+      st.textContent = mode === "signup" ? "Creating account..." : "Signing in...";
+      try {
+        const res = mode === "signup"
+          ? await sbClient.auth.signUp({ email, password })
+          : await sbClient.auth.signInWithPassword({ email, password });
+        if (res.error) throw res.error;
+        if (mode === "signup" && !res.data.session) {
+          st.style.color = "var(--green)";
+          st.textContent = "Check your email to confirm your account, then sign in!";
+          return;
+        }
+        currentSession = res.data.session;
+        updateAuthUI();
+        closeModal("authBackdrop");
+      } catch (e) {
+        st.style.color = "#f87171";
+        st.textContent = e.message;
+      }
+    }
+
+    async function signOut() {
+      if (!sbClient) return;
+      await sbClient.auth.signOut();
+      currentSession = null;
+      updateAuthUI();
+    }
+
     function openSubmitModal() {
+      if (!currentSession?.access_token) {
+        openAuthModal();
+        return;
+      }
       document.getElementById("submitStatus").innerHTML = "";
       document.getElementById("submitBackdrop").classList.add("open");
     }
@@ -464,6 +553,7 @@
       status.textContent = "Uploading & scanning with VirusTotal (this may take ~15s)...";
 
       try {
+        if (!currentSession?.access_token) throw new Error("Please sign in first.");
         const file = form.file?.files?.[0];
         if (file && file.size > 5 * 1024 * 1024) {
           throw new Error("File is larger than the 5 MB limit.");
@@ -472,15 +562,16 @@
         fd.append("action", "create");
         const res = await fetch(`${supabaseUrl}/functions/v1/submit-mod`, {
           method: "POST",
-          headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` },
+          headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${currentSession.access_token}` },
           body: fd
         });
         const data = await res.json();
         if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
         status.style.color = "var(--green)";
-        status.innerHTML = `Clean scan! Mod is live.<div class="key-box"><strong>Save this Update Key</strong> (you'll need it to release updates):<br>${escapeHtml(data.update_key || "")}</div>`;
+        status.textContent = "Clean scan! Your mod is now live.";
         form.reset();
         await loadCatalog();
+        setTimeout(() => closeModal("submitBackdrop"), 1200);
       } catch (err) {
         status.style.color = "#f87171";
         status.textContent = err.message;
@@ -500,6 +591,7 @@
       status.textContent = "Scanning update with VirusTotal...";
 
       try {
+        if (!currentSession?.access_token) throw new Error("Please sign in first.");
         const file = form.file?.files?.[0];
         if (file && file.size > 5 * 1024 * 1024) {
           throw new Error("File is larger than the 5 MB limit.");
@@ -508,7 +600,7 @@
         fd.append("action", "update");
         const res = await fetch(`${supabaseUrl}/functions/v1/submit-mod`, {
           method: "POST",
-          headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` },
+          headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${currentSession.access_token}` },
           body: fd
         });
         const data = await res.json();
@@ -523,6 +615,27 @@
         status.textContent = err.message;
       } finally {
         btn.disabled = false;
+      }
+    }
+
+    async function deleteOwnMod(idx) {
+      const m = mods[idx];
+      if (!m || !currentSession?.access_token) return;
+      if (!confirm(`Delete "${m.name}"?`)) return;
+      try {
+        const fd = new FormData();
+        fd.append("action", "delete");
+        fd.append("mod_id", m.id);
+        const res = await fetch(`${supabaseUrl}/functions/v1/submit-mod`, {
+          method: "POST",
+          headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${currentSession.access_token}` },
+          body: fd
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+        await loadCatalog();
+      } catch (e) {
+        alert(e.message);
       }
     }
 

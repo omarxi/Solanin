@@ -16,8 +16,11 @@ create table if not exists public.community_mods (
   vt_malicious integer not null default 0,
   vt_total integer not null default 0,
   changelog jsonb not null default '[]'::jsonb,
+  owner_id uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now()
 );
+
+alter table public.community_mods add column if not exists owner_id uuid references auth.users(id) on delete set null;
 
 create table if not exists public.community_mod_secrets (
   mod_id text primary key references public.community_mods(id) on delete cascade,

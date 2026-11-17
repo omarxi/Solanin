@@ -28,14 +28,15 @@ function slugify(input: string): string {
     .slice(0, 48) || "mod";
 }
 
+const PENDING_MSG =
+  "VirusTotal is still scanning this file. Please try submitting the same file again in a minute or two.";
+
 async function scanWithVirusTotal(bytes: Uint8Array, filename: string, sha256: string, vtKey: string) {
-  // 1. Check if VirusTotal already has a report for this SHA-256
-  let res = await fetch(`https://www.virustotal.com/api/v3/files/${sha256}`, {
+  const res = await fetch(`https://www.virustotal.com/api/v3/files/${sha256}`, {
     headers: { "x-apikey": vtKey },
   });
 
   if (res.status === 404) {
-    // 2. Upload file for scanning
     const form = new FormData();
     form.append("file", new Blob([bytes]), filename);
     const up = await fetch("https://www.virustotal.com/api/v3/files", {
@@ -49,7 +50,6 @@ async function scanWithVirusTotal(bytes: Uint8Array, filename: string, sha256: s
     const upJson = await up.json();
     const analysisId = upJson?.data?.id;
 
-    // Poll briefly (up to ~15s) for analysis completion
     if (analysisId) {
       for (let i = 0; i < 5; i++) {
         await new Promise((r) => setTimeout(r, 3000));
@@ -97,9 +97,6 @@ async function scanWithVirusTotal(bytes: Uint8Array, filename: string, sha256: s
   };
 }
 
-const PENDING_MSG =
-  "VirusTotal is still scanning this file. Please try submitting the same file again in a minute or two.";
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -116,10 +113,22 @@ Deno.serve(async (req) => {
       return json({ error: "VIRUSTOTAL_API_KEY secret is not configured" }, 500);
     }
 
+    const authHeader = req.headers.get("authorization") || "";
+    const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
+    if (!jwt) {
+      return json({ error: "Please sign in first." }, 401);
+    }
+
+    const supabase = createClient(supabaseUrl, serviceKey);
+    const { data: userData, error: authErr } = await supabase.auth.getUser(jwt);
+    if (authErr || !userData?.user) {
+      return json({ error: "Session expired or invalid. Please sign in again." }, 401);
+    }
+    const user = userData.user;
+
     const form = await req.formData();
     const action = String(form.get("action") || "create").trim();
     const modIdInput = String(form.get("mod_id") || "").trim();
-    const updateKeyInput = String(form.get("update_key") || "").trim();
     const notes = String(form.get("notes") || "").trim();
     const name = String(form.get("name") || "").trim();
     const version = String(form.get("version") || "1.0.0").trim();
@@ -130,20 +139,32 @@ Deno.serve(async (req) => {
     const file = form.get("file");
     const icon = form.get("icon");
 
-    const supabase = createClient(supabaseUrl, serviceKey);
+    if (action === "delete") {
+      if (!modIdInput) return json({ error: "Missing mod_id." }, 400);
+      const { data: existing } = await supabase
+        .from("community_mods")
+        .select("owner_id")
+        .eq("id", modIdInput)
+        .maybeSingle();
+      if (!existing || existing.owner_id !== user.id) {
+        return json({ error: "You do not own this mod." }, 403);
+      }
+      const { error: delErr } = await supabase.from("community_mods").delete().eq("id", modIdInput);
+      if (delErr) return json({ error: delErr.message }, 500);
+      return json({ ok: true });
+    }
 
     if (action === "update") {
-      if (!modIdInput || !updateKeyInput || !(file instanceof File)) {
-        return json({ error: "Mod ID, Update Key, and new .dll/.zip file are required." }, 400);
+      if (!modIdInput || !(file instanceof File)) {
+        return json({ error: "Mod ID and new .dll/.zip file are required." }, 400);
       }
-      const { data: sec } = await supabase
-        .from("community_mod_secrets")
-        .select("update_key_hash")
-        .eq("mod_id", modIdInput)
+      const { data: existing } = await supabase
+        .from("community_mods")
+        .select("owner_id, changelog")
+        .eq("id", modIdInput)
         .maybeSingle();
-      const providedHash = await sha256Hex(new TextEncoder().encode(updateKeyInput));
-      if (!sec || sec.update_key_hash !== providedHash) {
-        return json({ error: "Invalid Update Key for this mod." }, 403);
+      if (!existing || existing.owner_id !== user.id) {
+        return json({ error: "You do not own this mod." }, 403);
       }
 
       const lowerName = file.name.toLowerCase();
@@ -177,12 +198,7 @@ Deno.serve(async (req) => {
       }
       const downloadUrl = `${supabaseUrl}/storage/v1/object/public/community-mods/${modPath}`;
 
-      const { data: existing } = await supabase
-        .from("community_mods")
-        .select("changelog")
-        .eq("id", modIdInput)
-        .maybeSingle();
-      const prevLog = Array.isArray(existing?.changelog) ? existing.changelog : [];
+      const prevLog = Array.isArray(existing.changelog) ? existing.changelog : [];
       const today = new Date().toISOString().slice(0, 10);
       const nextLog = notes ? [{ version, date: today, notes }, ...prevLog] : prevLog;
 
@@ -206,6 +222,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, mod: updatedRow, virustotal_url: vt.url });
     }
 
+    // Create new mod
     if (!name || !author || !(file instanceof File)) {
       return json({ error: "Name, author, and mod file (.dll or .zip) are required." }, 400);
     }
@@ -218,14 +235,15 @@ Deno.serve(async (req) => {
       return json({ error: "File size limit is 5 MB." }, 400);
     }
 
-    // Basic abuse protection: global hourly throttle and total cap.
+    // Per-user rate limit: max 3 submissions per hour, plus 200 total cap.
     const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const { count: recentCount } = await supabase
+    const { count: userRecent } = await supabase
       .from("community_mods")
       .select("id", { count: "exact", head: true })
+      .eq("owner_id", user.id)
       .gte("created_at", hourAgo);
-    if ((recentCount ?? 0) >= 10) {
-      return json({ error: "Too many submissions right now. Please try again later." }, 429);
+    if ((userRecent ?? 0) >= 3) {
+      return json({ error: "Rate limit: max 3 mod submissions per hour per account." }, 429);
     }
     const { count: totalCount } = await supabase
       .from("community_mods")
@@ -237,7 +255,6 @@ Deno.serve(async (req) => {
     const modBytes = new Uint8Array(await file.arrayBuffer());
     const sha256 = await sha256Hex(modBytes);
 
-    // Run VirusTotal check
     const vt = await scanWithVirusTotal(modBytes, file.name, sha256, vtKey);
     if (vt.pending) {
       return json({ error: PENDING_MSG, virustotal_url: vt.url }, 202);
@@ -253,8 +270,6 @@ Deno.serve(async (req) => {
     }
 
     const id = `community-${slugify(name)}-${sha256.slice(0, 6)}`;
-
-    // Never overwrite an existing mod (prevents takeover of someone's entry/update key).
     const { data: already } = await supabase
       .from("community_mods")
       .select("id")
@@ -264,7 +279,6 @@ Deno.serve(async (req) => {
       return json({ error: "A mod with this name and file already exists." }, 409);
     }
 
-    // Upload mod file to storage
     const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const modPath = `${id}/${safeFileName}`;
     const { error: upErr } = await supabase.storage
@@ -275,7 +289,6 @@ Deno.serve(async (req) => {
     }
     const downloadUrl = `${supabaseUrl}/storage/v1/object/public/community-mods/${modPath}`;
 
-    // Upload optional icon
     let iconUrl: string | null = null;
     if (icon instanceof File && icon.size > 0 && icon.size <= 3 * 1024 * 1024) {
       const iconBytes = new Uint8Array(await icon.arrayBuffer());
@@ -305,6 +318,7 @@ Deno.serve(async (req) => {
       vt_malicious: vt.malicious,
       vt_total: vt.total,
       changelog: [],
+      owner_id: user.id,
     };
 
     const { error: dbErr } = await supabase.from("community_mods").insert(row);
@@ -312,17 +326,7 @@ Deno.serve(async (req) => {
       return json({ error: `Database error: ${dbErr.message}` }, 500);
     }
 
-    const updateKey = crypto.randomUUID();
-    const updateKeyHash = await sha256Hex(new TextEncoder().encode(updateKey));
-    const { error: secErr } = await supabase
-      .from("community_mod_secrets")
-      .insert({ mod_id: id, update_key_hash: updateKeyHash });
-    if (secErr) {
-      await supabase.from("community_mods").delete().eq("id", id);
-      return json({ error: `Could not create update key: ${secErr.message}` }, 500);
-    }
-
-    return json({ ok: true, mod: row, virustotal_url: vt.url, update_key: updateKey });
+    return json({ ok: true, mod: row, virustotal_url: vt.url });
   } catch (err) {
     return json({ error: String(err) }, 500);
   }
