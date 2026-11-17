@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Browse Mods — Solanin</title>
+  <link rel="icon" type="image/png" href="assets/icon.png" />
+  <style>
+    :root {
+      --bg: #111318;
+      --panel: #171a21;
+      --card: #1e222b;
+      --border: #2d323e;
+      --text: #eaedf3;
+      --muted: #8e96a8;
+      --blue: #3b82f6;
+      --green: #22c55e;
+      --amber: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    a { color: inherit; text-decoration: none; }
+    .container { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+    nav { background: var(--panel); border-bottom: 1px solid var(--border); }
+    .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 58px; gap: 16px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.05rem; }
+    .brand img { width: 28px; height: 28px; border-radius: 6px; }
+    .brand span.sub { color: var(--muted); font-weight: 400; font-size: 0.9rem; }
+    .nav-links { display: flex; gap: 18px; font-size: 0.92rem; color: var(--muted); }
+    .nav-links a:hover, .nav-links a.active { color: var(--text); }
+
+    .toolbar {
+      padding: 22px 0 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .toolbar-left, .toolbar-right { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .search {
+      padding: 8px 12px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      width: 240px;
+      max-width: 100%;
+      font-size: 0.9rem;
+    }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 8px 14px; border-radius: 7px; font-weight: 600; font-size: 0.88rem;
+      border: 1px solid var(--border); background: var(--card); color: var(--text); cursor: pointer;
+    }
+    .btn:hover { border-color: #454d5e; }
+    .btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+    .btn.small { padding: 6px 11px; font-size: 0.83rem; }
+    .btn.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+
+    .mod-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 14px;
+      padding-bottom: 56px;
+    }
+    .mod-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding-bottom: 56px;
+    }
+    .mod-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .mod-list .mod-card {
+      flex-direction: row;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .mod-top { display: flex; gap: 12px; align-items: flex-start; }
+    .mod-icon {
+      width: 48px; height: 48px; border-radius: 8px; object-fit: cover;
+      background: var(--panel); border: 1px solid var(--border); flex-shrink: 0;
+    }
+    .mod-title { font-weight: 700; font-size: 1rem; margin: 0; }
+    .mod-meta { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
+    .mod-summary { font-size: 0.88rem; color: #c6ccd8; margin: 0; }
+    .mod-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
+    .backdrop {
+      position: fixed; inset: 0; background: rgba(8, 10, 14, 0.78);
+      display: none; align-items: center; justify-content: center; padding: 18px; z-index: 50;
+    }
+    .backdrop.open { display: flex; }
+    .modal {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+      max-width: 680px; width: 100%; max-height: 88vh; overflow-y: auto; padding: 20px;
+    }
+    .modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+    .modal-head h3 { margin: 0; font-size: 1.25rem; }
+    .close-btn {
+      background: transparent; border: 1px solid var(--border); color: var(--muted);
+      border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 0.9rem;
+    }
+    .gallery { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+    .gallery img {
+      max-width: 100%; max-height: 300px; object-fit: contain; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--bg); align-self: flex-start;
+    }
+    .desc-box { white-space: pre-wrap; font-size: 0.92rem; color: #d4d9e3; margin: 10px 0 16px; }
+    .instr-box {
+      background: var(--card); border: 1px solid var(--border); border-radius: 7px;
+      padding: 10px 12px; font-size: 0.88rem; margin-bottom: 12px;
+    }
+    .alt-link { font-size: 0.84rem; color: var(--muted); margin-top: 8px; }
+    .alt-link a { color: var(--blue); }
+    .alt-link a:hover { text-decoration: underline; }
+    .key-box {
+      background: var(--bg); border: 1px solid var(--green); border-radius: 7px;
+      padding: 10px; font-family: monospace; font-size: 0.86rem; word-break: break-all; margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="container nav-inner">
+      <a class="brand" href="index.html">
+        <img src="assets/icon.png" alt="Solanin" />
+        <span>Solanin</span>
+        <span class="sub">Ages of Conflict</span>
+      </a>
+      <div class="nav-links">
+        <a href="index.html">Home</a>
+        <a href="mods.html" class="active">All Mods</a>
+        <a href="https://github.com/omarxi/Solanin/releases/latest" target="_blank" rel="noopener">Releases</a>
+        <a href="https://github.com/omarxi/Solanin" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <input class="search" id="searchInput" type="search" placeholder="Search all plugins..." oninput="renderMods()" />
+        <button class="btn small active" id="fAll" onclick="setFilter('all')">All (<span id="cAll">0</span>)</button>
+        <button class="btn small" id="fOfficial" onclick="setFilter('official')">Official (<span id="cOfficial">0</span>)</button>
+        <button class="btn small" id="fCommunity" onclick="setFilter('community')">Community (<span id="cCommunity">0</span>)</button>
+      </div>
+      <div class="toolbar-right">
+        <button class="btn small active" id="vGrid" onclick="setView('grid')">Grid</button>
+        <button class="btn small" id="vList" onclick="setView('list')">List</button>
+        <button class="btn primary small" id="submitBtn" style="display:none;" onclick="openSubmitModal()">+ Submit a Mod</button>
+      </div>
+    </div>
+
+    <div id="modContainer" class="mod-grid">
+      <p style="color: var(--muted);">Loading catalog...</p>
+    </div>
+  </div>
+
+  <!-- Detail Modal -->
+  <div class="backdrop" id="detailBackdrop" onclick="if (event.target === this) closeModal('detailBackdrop')">
+    <div class="modal" id="detailModal"></div>
+  </div>
+
+  <!-- Install Prompt Modal -->
+  <div class="backdrop" id="installBackdrop" onclick="if (event.target === this) closeModal('installBackdrop')">
+    <div class="modal" style="max-width: 480px;" id="installModal"></div>
+  </div>
+
+  <!-- Submit a Mod Modal -->
+  <div class="backdrop" id="submitBackdrop" onclick="if (event.target === this) closeModal('submitBackdrop')">
+    <div class="modal" style="max-width: 540px;">
+      <div class="modal-head">
+        <h3>Submit a Community Mod</h3>
+        <button class="close-btn" onclick="closeModal('submitBackdrop')">Close</button>
+      </div>
+      <p style="margin-top:0; color:var(--muted); font-size:0.86rem;">
+        Uploads are automatically scanned with VirusTotal. Flagged files are rejected.
+      </p>
+      <form id="submitForm" onsubmit="submitCommunityMod(event)" style="display:flex; flex-direction:column; gap:10px;">
+        <input class="search" style="width:100%;" name="name" placeholder="Mod Name *" required />
+        <div style="display:flex; gap:10px;">
+          <input class="search" style="flex:1;" name="version" placeholder="Version (e.g. 1.0.0)" value="1.0.0" required />
+          <input class="search" style="flex:1;" name="author" placeholder="Author *" required />
+        </div>
+        <input class="search" style="width:100%;" name="summary" placeholder="Short Summary (1-2 sentences)" />
+        <textarea class="search" style="width:100%; min-height:90px; font-family:inherit;" name="description" placeholder="Full Description"></textarea>
+        <input class="search" style="width:100%;" name="instructions" placeholder="How to use (e.g. Press . in-game)" />
+        <label style="font-size:0.84rem; color:var(--muted);">Mod File (.dll or .zip, max 5 MB) *</label>
+        <input type="file" name="file" accept=".dll,.zip" required style="color:var(--text);" />
+        <label style="font-size:0.84rem; color:var(--muted);">Mod Icon (optional PNG/JPG)</label>
+        <input type="file" name="icon" accept="image/*" style="color:var(--text);" />
+        <div id="submitStatus" style="font-size:0.86rem; color:var(--muted);"></div>
+        <button class="btn primary" id="submitFormBtn" type="submit">Scan with VirusTotal &amp; Submit</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Release Update Modal -->
+  <div class="backdrop" id="updateBackdrop" onclick="if (event.target === this) closeModal('updateBackdrop')">
+    <div class="modal" style="max-width: 520px;">
+      <div class="modal-head">
+        <h3 id="updateTitle">Release Mod Update</h3>
+        <button class="close-btn" onclick="closeModal('updateBackdrop')">Close</button>
+      </div>
+      <form id="updateForm" onsubmit="submitModUpdate(event)" style="display:flex; flex-direction:column; gap:10px;">
+        <input type="hidden" name="mod_id" id="updModId" />
+        <input class="search" style="width:100%;" name="update_key" placeholder="Your Update Key *" required />
+        <input class="search" style="width:100%;" name="version" id="updVersion" placeholder="New Version (e.g. 1.1.0) *" required />
+        <textarea class="search" style="width:100%; min-height:85px; font-family:inherit;" name="notes" placeholder="What's changed / hotfixes"></textarea>
+        <label style="font-size:0.84rem; color:var(--muted);">New Mod File (.dll or .zip, max 5 MB) *</label>
+        <input type="file" name="file" accept=".dll,.zip" required style="color:var(--text);" />
+        <div id="updateStatus" style="font-size:0.86rem; color:var(--muted);"></div>
+        <button class="btn primary" id="updateFormBtn" type="submit">Scan &amp; Publish Update</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let mods = [];
+    let filterMode = "all";
+    let viewMode = "grid";
+    let supabaseUrl = "";
+    let supabaseAnonKey = "";
+
+    async function loadCatalog() {
+      const urls = [
+        "./catalog.json",
+        "https://raw.githubusercontent.com/omarxi/Solanin/main/catalog.json"
+      ];
+      let baseData = null;
+      for (const u of urls) {
+        try {
+          const res = await fetch(u + "?t=" + Date.now(), { cache: "no-store" });
+          if (!res.ok) continue;
+          baseData = await res.json();
+          break;
+        } catch (_) {}
+      }
+      if (!baseData) {
+        document.getElementById("modContainer").innerHTML =
+          `<p style="color: var(--muted);">Could not load mod catalog right now.</p>`;
+        return;
+      }
+
+      mods = Array.isArray(baseData.mods) ? baseData.mods : [];
+      supabaseUrl = (baseData.supabase_url || "").trim().replace(/\/+$/, "");
+      supabaseAnonKey = (baseData.supabase_anon_key || "").trim();
+
+      if (supabaseUrl && supabaseAnonKey) {
+        document.getElementById("submitBtn").style.display = "inline-flex";
+        try {
+          const sbRes = await fetch(
+            `${supabaseUrl}/rest/v1/community_mods?select=*&order=created_at.desc`,
+            {
+              headers: {
+                apikey: supabaseAnonKey,
+                Authorization: `Bearer ${supabaseAnonKey}`
+              }
+            }
+          );
+          if (sbRes.ok) {
+            const rows = await sbRes.json();
+            for (const r of rows) {
+              if (!mods.some((m) => m.id === r.id)) {
+                mods.push({ ...r, user_submitted: true });
+              }
+            }
+          }
+        } catch (_) {}
+      }
+      renderMods();
+    }
+
+    function setFilter(f) {
+      filterMode = f;
+      document.getElementById("fAll").classList.toggle("active", f === "all");
+      document.getElementById("fOfficial").classList.toggle("active", f === "official");
+      document.getElementById("fCommunity").classList.toggle("active", f === "community");
+      renderMods();
+    }
+
+    function setView(v) {
+      viewMode = v;
+      document.getElementById("vGrid").classList.toggle("active", v === "grid");
+      document.getElementById("vList").classList.toggle("active", v === "list");
+      const el = document.getElementById("modContainer");
+      el.className = v === "grid" ? "mod-grid" : "mod-list";
+      renderMods();
+    }
+
+    function firstThumb(m) {
+      if (m.icon_url) return m.icon_url;
+      if (m.image_url) return m.image_url;
+      if (Array.isArray(m.previews)) {
+        const img = m.previews.find((u) => !/\.(mp4|webm|mov)(\?|$)/i.test(u) && !u.includes("youtube.com") && !u.includes("youtu.be"));
+        if (img) return img;
+      }
+      return "assets/icon.png";
+    }
+
+    function renderMods() {
+      const q = document.getElementById("searchInput").value.trim().toLowerCase();
+      const officialCount = mods.filter((m) => !m.user_submitted).length;
+      const communityCount = mods.filter((m) => m.user_submitted).length;
+      document.getElementById("cAll").textContent = mods.length;
+      document.getElementById("cOfficial").textContent = officialCount;
+      document.getElementById("cCommunity").textContent = communityCount;
+
+      const filtered = mods.filter((m) => {
+        if (filterMode === "official" && m.user_submitted) return false;
+        if (filterMode === "community" && !m.user_submitted) return false;
+        return (
+          !q ||
+          (m.name || "").toLowerCase().includes(q) ||
+          (m.author || "").toLowerCase().includes(q) ||
+          (m.summary || "").toLowerCase().includes(q)
+        );
+      });
+
+      const container = document.getElementById("modContainer");
+      if (!filtered.length) {
+        container.innerHTML = `<p style="color: var(--muted);">No plugins found.</p>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map((m) => {
+        const idx = mods.indexOf(m);
+        return `
+          <div class="mod-card">
+            <div style="flex:1; min-width:220px;">
+              <div class="mod-top">
+                <img class="mod-icon" src="${escapeAttr(firstThumb(m))}" alt="" />
+                <div>
+                  <h3 class="mod-title">${escapeHtml(m.name)}</h3>
+                  <div class="mod-meta">
+                    v${escapeHtml(m.version)}${m.author ? " · " + escapeHtml(m.author) : ""}
+                    ${m.user_submitted ? ` · <strong style="color:var(--amber);">COMMUNITY MADE</strong>` : ""}
+                  </div>
+                </div>
+              </div>
+              ${viewMode === "grid" && m.summary ? `<p class="mod-summary" style="margin-top:10px;">${escapeHtml(m.summary)}</p>` : ""}
+            </div>
+            <div class="mod-actions">
+              ${m.user_submitted && m.virustotal_url ? `<a class="btn small" href="${escapeAttr(m.virustotal_url)}" target="_blank" rel="noopener">VirusTotal</a>` : ""}
+              ${m.user_submitted ? `<button class="btn small" onclick="openUpdateModal(${idx})">Release Update</button>` : ""}
+              <button class="btn small" onclick="openDetail(${idx})">Details</button>
+              <button class="btn small primary" onclick="promptInstall(${idx})">Install</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function openDetail(idx) {
+      const m = mods[idx];
+      if (!m) return;
+      const media = [];
+      for (const u of [m.image_url, m.video_url, ...(m.previews || [])]) {
+        if (u && !media.includes(u)) media.push(u);
+      }
+      const mediaHtml = media.map((u) => {
+        const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(u) || u.includes("youtube.com") || u.includes("youtu.be");
+        return isVideo
+          ? `<a class="btn small" href="${escapeAttr(u)}" target="_blank" rel="noopener">Watch Preview Video</a>`
+          : `<img src="${escapeAttr(u)}" alt="${escapeAttr(m.name)} preview" />`;
+      }).join("");
+
+      const changelogHtml = (Array.isArray(m.changelog) && m.changelog.length)
+        ? `<div style="margin-top:14px;"><strong>What's New</strong>${m.changelog.map((c) => `
+            <div class="instr-box" style="margin-top:6px;">
+              <strong style="color:var(--blue);">v${escapeHtml(c.version)}</strong> ${c.date ? "· " + escapeHtml(c.date) : ""}
+              <div style="white-space:pre-wrap; margin-top:4px;">${escapeHtml(c.notes || "")}</div>
+            </div>`).join("")}</div>`
+        : "";
+
+      document.getElementById("detailModal").innerHTML = `
+        <div class="modal-head">
+          <div>
+            <h3>${escapeHtml(m.name)}</h3>
+            <div class="mod-meta">v${escapeHtml(m.version)}${m.author ? " · by " + escapeHtml(m.author) : ""}</div>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn small primary" onclick="closeModal('detailBackdrop'); promptInstall(${idx})">Install</button>
+            <button class="close-btn" onclick="closeModal('detailBackdrop')">Close</button>
+          </div>
+        </div>
+        ${m.user_submitted ? `
+          <div style="margin-bottom:10px;">
+            <strong style="color:var(--amber);">COMMUNITY MADE</strong>
+            ${m.virustotal_url ? ` · <a href="${escapeAttr(m.virustotal_url)}" target="_blank" rel="noopener" style="color:var(--blue); text-decoration:underline;">VirusTotal Scan</a>` : ""}
+          </div>
+        ` : ""}
+        ${m.instructions ? `<div class="instr-box"><strong>How to use:</strong> ${escapeHtml(m.instructions)}</div>` : ""}
+        ${mediaHtml ? `<div class="gallery">${mediaHtml}</div>` : ""}
+        <div class="desc-box">${escapeHtml(m.description || m.summary || "No description provided.")}</div>
+        ${changelogHtml}
+      `;
+      document.getElementById("detailBackdrop").classList.add("open");
+    }
+
+    function promptInstall(idx) {
+      const m = mods[idx];
+      if (!m) return;
+      const fileName = (m.download_url || "plugin").split("/").pop().split("?")[0] || "plugin";
+      document.getElementById("installModal").innerHTML = `
+        <div class="modal-head">
+          <h3>Install ${escapeHtml(m.name)}</h3>
+          <button class="close-btn" onclick="closeModal('installBackdrop')">Close</button>
+        </div>
+        ${m.user_submitted ? `<div style="margin-bottom:10px;"><strong style="color:var(--amber);">COMMUNITY MADE</strong>${m.virustotal_url ? ` · <a href="${escapeAttr(m.virustotal_url)}" target="_blank" rel="noopener" style="color:var(--blue); text-decoration:underline;">VirusTotal</a>` : ""}</div>` : ""}
+        <p style="margin-top:0; color:#cfd5e0; font-size:0.93rem;">
+          Want to install the <strong>Solanin</strong> app instead? It automatically installs BepInEx, keeps your plugins updated, and lets you enable or disable them anytime.
+        </p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin: 14px 0;">
+          <a class="btn primary" href="https://github.com/omarxi/Solanin/releases/latest/download/solanin-setup.exe">Get Solanin (Windows)</a>
+          <a class="btn" href="https://github.com/omarxi/Solanin/releases/latest/download/solanin-x86_64.AppImage">Get Solanin (Linux)</a>
+        </div>
+        <div class="alt-link">
+          Or <a href="${escapeAttr(m.download_url)}" target="_blank" rel="noopener">download ${escapeHtml(fileName)} directly</a> for manual install.
+        </div>
+      `;
+      document.getElementById("installBackdrop").classList.add("open");
+    }
+
+    function openSubmitModal() {
+      document.getElementById("submitStatus").innerHTML = "";
+      document.getElementById("submitBackdrop").classList.add("open");
+    }
+
+    function openUpdateModal(idx) {
+      const m = mods[idx];
+      if (!m) return;
+      document.getElementById("updateTitle").textContent = `Update ${m.name}`;
+      document.getElementById("updModId").value = m.id;
+      document.getElementById("updVersion").value = m.version;
+      document.getElementById("updateStatus").textContent = "";
+      document.getElementById("updateBackdrop").classList.add("open");
+    }
+
+    async function submitCommunityMod(e) {
+      e.preventDefault();
+      if (!supabaseUrl || !supabaseAnonKey) return;
+      const form = e.target;
+      const btn = document.getElementById("submitFormBtn");
+      const status = document.getElementById("submitStatus");
+      btn.disabled = true;
+      status.style.color = "var(--muted)";
+      status.textContent = "Uploading & scanning with VirusTotal (this may take ~15s)...";
+
+      try {
+        const file = form.file?.files?.[0];
+        if (file && file.size > 5 * 1024 * 1024) {
+          throw new Error("File is larger than the 5 MB limit.");
+        }
+        const fd = new FormData(form);
+        fd.append("action", "create");
+        const res = await fetch(`${supabaseUrl}/functions/v1/submit-mod`, {
+          method: "POST",
+          headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` },
+          body: fd
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+        status.style.color = "var(--green)";
+        status.innerHTML = `Clean scan! Mod is live.<div class="key-box"><strong>Save this Update Key</strong> (you'll need it to release updates):<br>${escapeHtml(data.update_key || "")}</div>`;
+        form.reset();
+        await loadCatalog();
+      } catch (err) {
+        status.style.color = "#f87171";
+        status.textContent = err.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function submitModUpdate(e) {
+      e.preventDefault();
+      if (!supabaseUrl || !supabaseAnonKey) return;
+      const form = e.target;
+      const btn = document.getElementById("updateFormBtn");
+      const status = document.getElementById("updateStatus");
+      btn.disabled = true;
+      status.style.color = "var(--muted)";
+      status.textContent = "Scanning update with VirusTotal...";
+
+      try {
+        const file = form.file?.files?.[0];
+        if (file && file.size > 5 * 1024 * 1024) {
+          throw new Error("File is larger than the 5 MB limit.");
+        }
+        const fd = new FormData(form);
+        fd.append("action", "update");
+        const res = await fetch(`${supabaseUrl}/functions/v1/submit-mod`, {
+          method: "POST",
+          headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` },
+          body: fd
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+        status.style.color = "var(--green)";
+        status.textContent = "Update published!";
+        form.reset();
+        await loadCatalog();
+        setTimeout(() => closeModal("updateBackdrop"), 1000);
+      } catch (err) {
+        status.style.color = "#f87171";
+        status.textContent = err.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove("open");
+    }
+    function escapeHtml(s) {
+      return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+    function escapeAttr(s) {
+      return escapeHtml(s).replace(/"/g, "&quot;");
+    }
+
+    loadCatalog();
+  </script>
+</body>
+</html>

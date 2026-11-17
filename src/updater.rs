@@ -75,7 +75,7 @@ pub fn check_for_update() -> Result<Option<AppUpdateInfo>, String> {
             appimage_url = Some(a.browser_download_url);
         } else if lower == "solanin-setup.exe" {
             setup_url = Some(a.browser_download_url);
-        } else if lower == "solanin.exe" {
+        } else if lower == "solanin.exe" || lower == "solanin-portable.exe" {
             exe_url = Some(a.browser_download_url);
         }
     }

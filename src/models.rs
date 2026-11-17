@@ -69,6 +69,10 @@ pub struct ModEntry {
     pub updated_at: String,
     #[serde(default)]
     pub changelog: Vec<ReleaseNote>,
+    #[serde(default)]
+    pub user_submitted: bool,
+    #[serde(default)]
+    pub virustotal_url: Option<String>,
 }
 
 /// Root structure of `catalog.json`.
@@ -78,6 +82,10 @@ pub struct ModCatalog {
     pub name: String,
     #[serde(default)]
     pub announcement: Option<String>,
+    #[serde(default)]
+    pub supabase_url: Option<String>,
+    #[serde(default)]
+    pub supabase_anon_key: Option<String>,
     #[serde(default)]
     pub mods: Vec<ModEntry>,
 }

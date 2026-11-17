@@ -290,7 +290,7 @@
         <span class="sub">Ages of Conflict</span>
       </div>
       <div class="nav-links">
-        <a href="#mods">Mods</a>
+        <a href="mods.html">Mods</a>
         <a href="https://github.com/omarxi/Solanin/releases/latest" target="_blank" rel="noopener">Releases</a>
         <a href="https://github.com/omarxi/Solanin" target="_blank" rel="noopener">GitHub</a>
       </div>
@@ -323,11 +323,13 @@
 
     <section class="section" id="mods">
       <div class="section-head">
-        <h2>Available Plugins (<span id="modCount">0</span>)</h2>
-        <input class="search" id="searchInput" type="search" placeholder="Search plugins..." oninput="renderMods()" />
+        <h2>Featured Official Plugins</h2>
       </div>
       <div id="modGrid" class="mod-grid">
         <p style="color: var(--muted);">Loading catalog...</p>
+      </div>
+      <div style="margin-top: 22px; text-align: center;">
+        <a class="btn primary" href="mods.html">Browse the rest of the mods + community plugins →</a>
       </div>
     </section>
   </div>
@@ -353,21 +355,26 @@
 
     async function loadCatalog() {
       const urls = [
-        "https://raw.githubusercontent.com/omarxi/Solanin/main/catalog.json",
-        "./catalog.json"
+        "./catalog.json",
+        "https://raw.githubusercontent.com/omarxi/Solanin/main/catalog.json"
       ];
+      let baseData = null;
       for (const u of urls) {
         try {
           const res = await fetch(u + "?t=" + Date.now(), { cache: "no-store" });
           if (!res.ok) continue;
-          const data = await res.json();
-          mods = Array.isArray(data.mods) ? data.mods : [];
-          renderMods();
-          return;
+          baseData = await res.json();
+          break;
         } catch (_) {}
       }
-      document.getElementById("modGrid").innerHTML =
-        `<p style="color: var(--muted);">Could not load mod catalog right now.</p>`;
+      if (!baseData) {
+        document.getElementById("modGrid").innerHTML =
+          `<p style="color: var(--muted);">Could not load mod catalog right now.</p>`;
+        return;
+      }
+
+      mods = Array.isArray(baseData.mods) ? baseData.mods : [];
+      renderMods();
     }
 
     function firstThumb(m) {
@@ -381,20 +388,13 @@
     }
 
     function renderMods() {
-      const q = document.getElementById("searchInput").value.trim().toLowerCase();
-      const filtered = mods.filter((m) =>
-        !q ||
-        (m.name || "").toLowerCase().includes(q) ||
-        (m.author || "").toLowerCase().includes(q) ||
-        (m.summary || "").toLowerCase().includes(q)
-      );
-      document.getElementById("modCount").textContent = filtered.length;
+      const featured = mods.filter((m) => !m.user_submitted).slice(0, 6);
       const grid = document.getElementById("modGrid");
-      if (!filtered.length) {
-        grid.innerHTML = `<p style="color: var(--muted);">No plugins match your search.</p>`;
+      if (!featured.length) {
+        grid.innerHTML = `<p style="color: var(--muted);">No plugins found.</p>`;
         return;
       }
-      grid.innerHTML = filtered.map((m) => {
+      grid.innerHTML = featured.map((m) => {
         const idx = mods.indexOf(m);
         return `
           <div class="mod-card">
@@ -403,7 +403,10 @@
                 <img class="mod-icon" src="${escapeAttr(firstThumb(m))}" alt="" />
                 <div>
                   <h3 class="mod-title">${escapeHtml(m.name)}</h3>
-                  <div class="mod-meta">v${escapeHtml(m.version)}${m.author ? " · " + escapeHtml(m.author) : ""}</div>
+                  <div class="mod-meta">
+                    v${escapeHtml(m.version)}${m.author ? " · " + escapeHtml(m.author) : ""}
+                    ${m.user_submitted ? ` · <span style="color:#f59e0b; font-weight:600;">User-Submitted</span>` : ""}
+                  </div>
                 </div>
               </div>
               ${m.summary ? `<p class="mod-summary" style="margin-top:10px;">${escapeHtml(m.summary)}</p>` : ""}
@@ -444,6 +447,12 @@
             <button class="close-btn" onclick="closeModal('detailBackdrop')">Close</button>
           </div>
         </div>
+        ${m.user_submitted ? `
+          <div class="instr-box" style="border-color:#f59e0b; color:#fbbf24;">
+            <strong>User-Submitted Mod:</strong> Not verified by the Solanin author. You are responsible for anything you install.
+            ${m.virustotal_url ? ` · <a href="${escapeAttr(m.virustotal_url)}" target="_blank" rel="noopener" style="color:var(--blue); text-decoration:underline;">View VirusTotal Scan</a>` : ""}
+          </div>
+        ` : ""}
         ${m.instructions ? `<div class="instr-box"><strong>How to use:</strong> ${escapeHtml(m.instructions)}</div>` : ""}
         ${mediaHtml ? `<div class="gallery">${mediaHtml}</div>` : ""}
         <div class="desc-box">${escapeHtml(m.description || m.summary || "No description provided.")}</div>
@@ -460,6 +469,12 @@
           <h3>Install ${escapeHtml(m.name)}</h3>
           <button class="close-btn" onclick="closeModal('installBackdrop')">Close</button>
         </div>
+        ${m.user_submitted ? `
+          <div class="instr-box" style="border-color:#f59e0b; color:#fbbf24;">
+            <strong>Warning:</strong> This mod was submitted by a user. Solanin's author is not responsible for third-party files.
+            ${m.virustotal_url ? `<br><a href="${escapeAttr(m.virustotal_url)}" target="_blank" rel="noopener" style="color:var(--blue); text-decoration:underline;">View VirusTotal Scan</a>` : ""}
+          </div>
+        ` : ""}
         <p style="margin-top:0; color:#cfd5e0; font-size:0.93rem;">
           Want to install the <strong>Solanin</strong> app instead? It automatically installs BepInEx, keeps your plugins updated, and lets you enable or disable them anytime.
         </p>

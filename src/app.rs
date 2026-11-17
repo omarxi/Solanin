@@ -31,6 +31,19 @@ enum Tab {
     Settings,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BrowseFilter {
+    All,
+    Official,
+    Community,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BrowseView {
+    List,
+    Grid,
+}
+
 enum WorkerMsg {
     CatalogFetched(Result<ModCatalog, String>),
     ModInstalled {
@@ -57,6 +70,8 @@ pub struct ModLauncherApp {
     state: AppState,
     catalog: ModCatalog,
     active_tab: Tab,
+    browse_filter: BrowseFilter,
+    browse_view: BrowseView,
     search_query: String,
     selected_catalog_id: Option<String>,
     status_message: String,
@@ -72,6 +87,7 @@ pub struct ModLauncherApp {
     install_popup: Option<(String, String)>,
     available_update: Option<AppUpdateInfo>,
     updating_app: bool,
+    warning_mod: Option<ModEntry>,
 }
 
 fn apply_theme(ctx: &egui::Context) {
@@ -168,6 +184,8 @@ impl ModLauncherApp {
             state,
             catalog,
             active_tab: Tab::Browse,
+            browse_filter: BrowseFilter::All,
+            browse_view: BrowseView::List,
             search_query: String::new(),
             selected_catalog_id,
             status_message: "Ready".to_string(),
@@ -183,6 +201,7 @@ impl ModLauncherApp {
             install_popup: None,
             available_update: None,
             updating_app: false,
+            warning_mod: None,
         };
 
         let _ = save_state(&app.paths, &app.state);
@@ -609,6 +628,11 @@ impl ModLauncherApp {
             .catalog
             .mods
             .iter()
+            .filter(|m| match self.browse_filter {
+                BrowseFilter::All => true,
+                BrowseFilter::Official => !m.user_submitted,
+                BrowseFilter::Community => m.user_submitted,
+            })
             .filter(|m| {
                 query.is_empty()
                     || m.name.to_lowercase().contains(&query)
@@ -619,6 +643,206 @@ impl ModLauncherApp {
             .cloned()
             .collect();
 
+        egui::TopBottomPanel::top("browse_controls")
+            .frame(
+                egui::Frame::none()
+                    .fill(BG_MAIN)
+                    .inner_margin(egui::Margin::symmetric(16.0, 8.0)),
+            )
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.search_query)
+                            .hint_text("Search plugins...")
+                            .desired_width(220.0),
+                    );
+                    ui.separator();
+                    ui.selectable_value(&mut self.browse_filter, BrowseFilter::All, "All");
+                    ui.selectable_value(&mut self.browse_filter, BrowseFilter::Official, "Official");
+                    ui.selectable_value(&mut self.browse_filter, BrowseFilter::Community, "Community");
+
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.selectable_value(&mut self.browse_view, BrowseView::Grid, "Grid");
+                        ui.selectable_value(&mut self.browse_view, BrowseView::List, "List");
+                    });
+                });
+            });
+
+        if self.browse_view == BrowseView::Grid {
+            egui::CentralPanel::default()
+                .frame(
+                    egui::Frame::none()
+                        .fill(BG_MAIN)
+                        .inner_margin(egui::Margin::symmetric(20.0, 14.0)),
+                )
+                .show(ctx, |ui| {
+                    if filtered.is_empty() {
+                        ui.label(RichText::new("No plugins found.").color(TEXT_MUTED));
+                        return;
+                    }
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        let cols = ((ui.available_width() / 320.0).floor() as usize).max(1);
+                        let card_w = ((ui.available_width() - (cols as f32 - 1.0) * 14.0)
+                            / cols as f32)
+                            .max(250.0);
+
+                        egui::Grid::new("browse_grid")
+                            .num_columns(cols)
+                            .spacing(egui::vec2(14.0, 14.0))
+                            .show(ui, |ui| {
+                                for (idx, m) in filtered.iter().enumerate() {
+                                    let thumb_url = m
+                                        .icon_url
+                                        .as_deref()
+                                        .map(str::trim)
+                                        .filter(|s| !s.is_empty())
+                                        .or_else(|| {
+                                            m.image_url
+                                                .as_deref()
+                                                .map(str::trim)
+                                                .filter(|s| !s.is_empty())
+                                        });
+                                    if let Some(u) = thumb_url {
+                                        if !self.preview_textures.contains_key(u)
+                                            && !self.loading_images.contains(u)
+                                        {
+                                            self.trigger_fetch_image(u.to_string(), ctx.clone());
+                                        }
+                                    }
+
+                                    let installed = self.state.installed.get(&m.id).cloned();
+                                    ui.vertical(|ui| {
+                                        ui.set_width(card_w);
+                                        ui.set_max_width(card_w);
+                                        card_frame(false).show(ui, |ui| {
+                                            ui.set_width(card_w - 24.0);
+                                            ui.set_min_height(145.0);
+
+                                            ui.horizontal(|ui| {
+                                                if let Some(u) = thumb_url {
+                                                    if let Some(tex) = self.current_texture(u, ctx)
+                                                    {
+                                                        ui.add(
+                                                            egui::Image::new(tex)
+                                                                .fit_to_exact_size(egui::vec2(
+                                                                    44.0, 44.0,
+                                                                ))
+                                                                .rounding(Rounding::same(6.0)),
+                                                        );
+                                                    }
+                                                }
+                                                ui.vertical(|ui| {
+                                                    ui.set_max_width(card_w - 84.0);
+                                                    ui.add(
+                                                        egui::Label::new(
+                                                            RichText::new(&m.name)
+                                                                .strong()
+                                                                .size(14.0)
+                                                                .color(TEXT_PRIMARY),
+                                                        )
+                                                        .wrap(),
+                                                    );
+                                                    let mut meta = format!("v{}", m.version);
+                                                    if !m.author.is_empty() {
+                                                        meta.push_str(&format!(" · {}", m.author));
+                                                    }
+                                                    ui.horizontal_wrapped(|ui| {
+                                                        ui.label(
+                                                            RichText::new(meta)
+                                                                .small()
+                                                                .color(TEXT_MUTED),
+                                                        );
+                                                        if m.user_submitted {
+                                                            ui.label(
+                                                                RichText::new("Community")
+                                                                    .small()
+                                                                    .color(ACCENT_AMBER),
+                                                            );
+                                                        }
+                                                    });
+                                                });
+                                            });
+
+                                            if !m.summary.is_empty() {
+                                                ui.add_space(6.0);
+                                                let short_sum = if m.summary.chars().count() > 110 {
+                                                    let s: String =
+                                                        m.summary.chars().take(107).collect();
+                                                    format!("{s}...")
+                                                } else {
+                                                    m.summary.clone()
+                                                };
+                                                ui.add(
+                                                    egui::Label::new(
+                                                        RichText::new(short_sum)
+                                                            .small()
+                                                            .color(TEXT_MUTED),
+                                                    )
+                                                    .wrap(),
+                                                );
+                                            }
+
+                                            ui.add_space(8.0);
+                                            ui.horizontal(|ui| {
+                                                if ui.button("Details").clicked() {
+                                                    self.selected_catalog_id =
+                                                        Some(m.id.clone());
+                                                    self.browse_view = BrowseView::List;
+                                                }
+                                                match installed {
+                                                    None => {
+                                                        if ui
+                                                            .add_enabled(
+                                                                !self.busy,
+                                                                primary_button(
+                                                                    "Install",
+                                                                    ACCENT_BLUE,
+                                                                ),
+                                                            )
+                                                            .clicked()
+                                                        {
+                                                            if m.user_submitted {
+                                                                self.warning_mod =
+                                                                    Some(m.clone());
+                                                            } else {
+                                                                self.trigger_install_mod(
+                                                                    m.clone(),
+                                                                    ctx.clone(),
+                                                                );
+                                                            }
+                                                        }
+                                                    }
+                                                    Some(inst) => {
+                                                        let (lbl, col) = if inst.enabled {
+                                                            (
+                                                                "Disable",
+                                                                Color32::from_rgb(55, 62, 78),
+                                                            )
+                                                        } else {
+                                                            ("Enable", ACCENT_GREEN)
+                                                        };
+                                                        if ui
+                                                            .add(primary_button(lbl, col))
+                                                            .clicked()
+                                                        {
+                                                            self.toggle_mod_enabled(&m.id);
+                                                        }
+                                                    }
+                                                }
+                                            });
+                                        });
+                                    });
+
+                                    if (idx + 1) % cols == 0 {
+                                        ui.end_row();
+                                    }
+                                }
+                            });
+                    });
+                });
+            return;
+        }
+
         egui::SidePanel::left("browse_list")
             .resizable(false)
             .exact_width(300.0)
@@ -628,13 +852,6 @@ impl ModLauncherApp {
                     .inner_margin(egui::Margin::same(12.0)),
             )
             .show(ctx, |ui| {
-                ui.add(
-                    egui::TextEdit::singleline(&mut self.search_query)
-                        .hint_text("Search plugins...")
-                        .desired_width(f32::INFINITY),
-                );
-                ui.add_space(6.0);
-
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     if filtered.is_empty() {
                         ui.add_space(16.0);
@@ -708,6 +925,13 @@ impl ModLauncherApp {
                                                 format!("v{}  ·  {}", m.version, m.author)
                                             };
                                             ui.label(RichText::new(meta).small().color(TEXT_MUTED));
+                                            if m.user_submitted {
+                                                ui.label(
+                                                    RichText::new("Community")
+                                                        .small()
+                                                        .color(ACCENT_AMBER),
+                                                );
+                                            }
                                             ui.with_layout(
                                                 egui::Layout::right_to_left(egui::Align::Center),
                                                 |ui| match installed {
@@ -801,6 +1025,14 @@ impl ModLauncherApp {
                                 )
                             };
                             ui.label(RichText::new(sub).color(TEXT_MUTED));
+                            if m.user_submitted {
+                                ui.label(
+                                    RichText::new("COMMUNITY MADE")
+                                        .small()
+                                        .strong()
+                                        .color(ACCENT_AMBER),
+                                );
+                            }
                         });
 
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -811,7 +1043,11 @@ impl ModLauncherApp {
                                         .add_enabled(!self.busy, primary_button("Install", ACCENT_BLUE))
                                         .clicked()
                                     {
-                                        self.trigger_install_mod(m.clone(), ctx.clone());
+                                        if m.user_submitted {
+                                            self.warning_mod = Some(m.clone());
+                                        } else {
+                                            self.trigger_install_mod(m.clone(), ctx.clone());
+                                        }
                                     }
                                 }
                                 Some(inst) => {
@@ -838,6 +1074,11 @@ impl ModLauncherApp {
                                     {
                                         self.trigger_install_mod(m.clone(), ctx.clone());
                                     }
+                                }
+                            }
+                            if let Some(ref vt_url) = m.virustotal_url {
+                                if ui.button("VirusTotal").clicked() {
+                                    let _ = open::that(vt_url);
                                 }
                             }
                         });
@@ -999,6 +1240,8 @@ impl ModLauncherApp {
                                     tags: Vec::new(),
                                     updated_at: String::new(),
                                     changelog: Vec::new(),
+                                    user_submitted: false,
+                                    virustotal_url: None,
                                 };
                                 self.trigger_install_mod(entry, ctx.clone());
                             }
@@ -1175,6 +1418,64 @@ impl ModLauncherApp {
                     ui.label(RichText::new(bepinex_status).small().color(TEXT_MUTED));
                 });
             });
+        if let Some(warn_entry) = self.warning_mod.clone() {
+            let mut close = false;
+            let mut confirm = false;
+            egui::Window::new("User-Submitted Mod Warning")
+                .collapsible(false)
+                .resizable(false)
+                .frame(
+                    egui::Frame::window(&ctx.style())
+                        .fill(BG_PANEL)
+                        .stroke(Stroke::new(1.0_f32, ACCENT_AMBER))
+                        .rounding(Rounding::same(10.0))
+                        .inner_margin(egui::Margin::same(16.0)),
+                )
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.set_max_width(420.0);
+                    ui.label(
+                        RichText::new(format!(
+                            "\"{}\" was submitted by a community user and is not verified by the Solanin author.",
+                            warn_entry.name
+                        ))
+                        .strong()
+                        .color(ACCENT_AMBER),
+                    );
+                    ui.add_space(6.0);
+                    ui.label(
+                        RichText::new(
+                            "You are responsible for anything you choose to install. Always review the VirusTotal scan before continuing.",
+                        )
+                        .color(TEXT_PRIMARY),
+                    );
+                    if let Some(ref vt_url) = warn_entry.virustotal_url {
+                        ui.add_space(8.0);
+                        if ui.button("View VirusTotal Scan").clicked() {
+                            let _ = open::that(vt_url);
+                        }
+                    }
+                    ui.add_space(12.0);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .add(primary_button("I Understand, Install", ACCENT_AMBER))
+                            .clicked()
+                        {
+                            confirm = true;
+                            close = true;
+                        }
+                        if ui.button("Cancel").clicked() {
+                            close = true;
+                        }
+                    });
+                });
+            if confirm {
+                self.trigger_install_mod(warn_entry, ctx.clone());
+            }
+            if close {
+                self.warning_mod = None;
+            }
+        }
     }
 }
 
@@ -1217,6 +1518,64 @@ impl eframe::App for ModLauncherApp {
                 });
             if close {
                 self.install_popup = None;
+            }
+        }
+        if let Some(warn_entry) = self.warning_mod.clone() {
+            let mut close = false;
+            let mut confirm = false;
+            egui::Window::new("User-Submitted Mod Warning")
+                .collapsible(false)
+                .resizable(false)
+                .frame(
+                    egui::Frame::window(&ctx.style())
+                        .fill(BG_PANEL)
+                        .stroke(Stroke::new(1.0_f32, ACCENT_AMBER))
+                        .rounding(Rounding::same(10.0))
+                        .inner_margin(egui::Margin::same(16.0)),
+                )
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.set_max_width(420.0);
+                    ui.label(
+                        RichText::new(format!(
+                            "\"{}\" was submitted by a community user and is not verified by the Solanin author.",
+                            warn_entry.name
+                        ))
+                        .strong()
+                        .color(ACCENT_AMBER),
+                    );
+                    ui.add_space(6.0);
+                    ui.label(
+                        RichText::new(
+                            "You are responsible for anything you choose to install. Always review the VirusTotal scan before continuing.",
+                        )
+                        .color(TEXT_PRIMARY),
+                    );
+                    if let Some(ref vt_url) = warn_entry.virustotal_url {
+                        ui.add_space(8.0);
+                        if ui.button("View VirusTotal Scan").clicked() {
+                            let _ = open::that(vt_url);
+                        }
+                    }
+                    ui.add_space(12.0);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .add(primary_button("I Understand, Install", ACCENT_AMBER))
+                            .clicked()
+                        {
+                            confirm = true;
+                            close = true;
+                        }
+                        if ui.button("Cancel").clicked() {
+                            close = true;
+                        }
+                    });
+                });
+            if confirm {
+                self.trigger_install_mod(warn_entry, ctx.clone());
+            }
+            if close {
+                self.warning_mod = None;
             }
         }
     }
