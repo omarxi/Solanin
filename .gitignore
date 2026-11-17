@@ -3,8 +3,9 @@
 **/*.rs.bk
 *.pdb
 
-# Local-only web catalog manager (keep private)
+# Local-only web catalog manager & backend scripts (keep private)
 /web/
+/supabase/
 
 # Local launcher runtime state (if tested in repo root)
 state.json
