@@ -97,8 +97,7 @@
       "icon_url": null,
       "previews": [
         "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/image5.png",
-        "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/image4.png",
-        "https://raw.githubusercontent.com/omarxi/solanin/main/mods/videos/13.11.2026_16.06.40_REC.mp4"
+        "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/image4.png"
       ],
       "image_url": null,
       "video_url": null,
@@ -121,6 +120,46 @@
       "previews": [
         "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/Screenshot_20261117_160651.png"
       ],
+      "image_url": null,
+      "video_url": null,
+      "sha256": null,
+      "install_target": "bepinex_plugins",
+      "tags": [],
+      "updated_at": "2026-11-17",
+      "changelog": []
+    },
+    {
+      "id": "ground-level",
+      "name": "Ground Level",
+      "version": "0.0.4",
+      "author": "JustStuck",
+      "summary": "Play any region of your world as its own zoomed-in, high-detail map—then merge territory, wars, nations, and stats back into your main world or discard it.",
+      "description": "⚠️ SAVE YOUR WORLD FIRST\n\nPlay any part of your world as its own standalone map. Select any region and zoom in with subdivided tiles—giving you room for detailed regional battles, rebellions, and campaigns that wouldn't fit on the world map.\n\nFeatures:\n• Zoomed-In Regions: Every selected tile expands into multiple tiles across, with adjustable scale settings (from full-detail regions to turning a single province into a massive campaign).\n• Dynamic Cities & Towns: Cities split into multiple sectors and towns auto-generate across the region.\n• Full Normal Gameplay: Play rebellions, wars, and diplomacy normally—your main world stays frozen while you're inside the region.\n• Merge or Discard: When finished, choose what transfers back to your world (territory, wars, new nations, gold, and stats), or discard the region to restore your world exactly as you left it.\n• Customizable Details & Keybinds: Adjust visual details and rebind keys in the in-game Settings menu (scroll all the way down).\n\nHow to Play:\n1. Open a scenario.\n2. Hold your mouse and drag anywhere to draw a selection box around the region.\n3. Press F5 to generate the region (note: larger regions or higher tile scales may freeze briefly while generating).\n4. Press G to open the mod menu, or R to turn it off.\n\nCompatibility:\n• Confirmed compatible with: SSM, CoF, PoC, War Reimagined v2 (not v3 yet), and non-map-changing mods (date speed mods, etc.).\n• ⚠️ Only partially compatible with Determinism+.",
+      "instructions": "Drag a box over a region, F5 to generate, G for menu, R to toggle off (Save your world first)",
+      "download_url": "https://raw.githubusercontent.com/omarxi/solanin/main/mods/GroundLevel.dll",
+      "icon_url": "https://raw.githubusercontent.com/omarxi/solanin/main/mods/icons/icon_for_the_mod_im_making.png",
+      "previews": [
+        "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/20261011232209_0.png"
+      ],
+      "image_url": null,
+      "video_url": null,
+      "sha256": null,
+      "install_target": "bepinex_plugins",
+      "tags": [],
+      "updated_at": "2026-11-17",
+      "changelog": []
+    },
+    {
+      "id": "war-goals",
+      "name": "Atharv's War Goals",
+      "version": "2.2.0",
+      "author": "atharv_asgola",
+      "summary": "Adds War Justification and specialized War Types (Liberation, Reconquest, and Puppet Wars) with custom peace deals, plus force-war options.",
+      "description": "Adds a War Justification system and three specialized war types with tailored peace deal outcomes:\n\nWar Types:\n• Liberation Wars: Declared to free the defending country's puppets. If the attacker wins, the defender's other territory is returned; if the attacker loses, the vanilla peace deal applies.\n• Reconquest Wars: Declared to reclaim the attacker's rightful territory. If the attacker wins, the defender keeps their remaining non-core land; if the attacker loses, the vanilla peace deal applies.\n• Puppet Wars: If the defender loses, they return any rightful attacker territory, keep their remaining land, and become a puppet of the attacker. If the attacker loses, the vanilla peace deal applies.\n\nWar Justification:\n• Wars now take time to justify before an actual declaration.\n• Justifications can fail, or—for Reconquest and Liberation Wars—the defending country may back down and return the contested territory or puppets before war breaks out.\n\nForce Wars:\n• Right-click the Attack or Fight to the Death button to reveal the force-war options.",
+      "instructions": "Right-click Attack or Fight to the Death to reveal force-war options",
+      "download_url": "https://raw.githubusercontent.com/omarxi/solanin/main/mods/atharvsWarGoals.dll",
+      "icon_url": "https://raw.githubusercontent.com/omarxi/solanin/main/mods/icons/Logo.png",
+      "previews": [],
       "image_url": null,
       "video_url": null,
       "sha256": null,
