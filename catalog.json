@@ -84,6 +84,50 @@
       "tags": [],
       "updated_at": "2026-11-16",
       "changelog": []
+    },
+    {
+      "id": "countryballs",
+      "name": "Countryballs",
+      "version": "1.7",
+      "author": "vananimations",
+      "summary": "Adds countryballs to the game, each country has its own countryball and they can interact with eachother and display emotions",
+      "description": "",
+      "instructions": "Toggled with f6",
+      "download_url": "https://raw.githubusercontent.com/omarxi/solanin/main/mods/CountryballsV1.7.dll",
+      "icon_url": null,
+      "previews": [
+        "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/image5.png",
+        "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/image4.png",
+        "https://raw.githubusercontent.com/omarxi/solanin/main/mods/videos/13.11.2026_16.06.40_REC.mp4"
+      ],
+      "image_url": null,
+      "video_url": null,
+      "sha256": null,
+      "install_target": "bepinex_plugins",
+      "tags": [],
+      "updated_at": "2026-11-17",
+      "changelog": []
+    },
+    {
+      "id": "provinces-of-conflict",
+      "name": "Provinces Of Conflict",
+      "version": "1.0.0",
+      "author": "zeezeedoom",
+      "summary": "adds provinces to the game",
+      "description": "compatible with countours of conflict",
+      "instructions": "",
+      "download_url": "https://raw.githubusercontent.com/omarxi/solanin/main/mods/Provinces Of Conflict.dll",
+      "icon_url": null,
+      "previews": [
+        "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/Screenshot_20261117_160651.png"
+      ],
+      "image_url": null,
+      "video_url": null,
+      "sha256": null,
+      "install_target": "bepinex_plugins",
+      "tags": [],
+      "updated_at": "2026-11-17",
+      "changelog": []
     }
   ]
 }
