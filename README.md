@@ -8,6 +8,11 @@
   A lightweight, cross-platform plugin launcher for <strong>Ages of Conflict: World War Simulator</strong> (Linux AppImage &amp; Windows <code>.exe</code>).
 </p>
 
+<p align="center">
+  <a href="https://omarxi.github.io/Solanin/"><strong>Website &amp; Mod Browser</strong></a> ·
+  <a href="https://github.com/omarxi/Solanin/releases/latest"><strong>Latest Release</strong></a>
+</p>
+
 ---
 
 ## Preview (v1.0.0)
@@ -24,7 +29,7 @@
 - **Enable / Disable Anytime**: Toggling a plugin off removes its files from `BepInEx/plugins` while keeping them staged locally for instant re-enabling.
 
 ## Download
-Grab the latest **`solanin-x86_64.AppImage`** (Linux) or **`solanin.exe`** (Windows) from [Releases](https://github.com/omarxi/Solanin/releases).
+Visit the **[Solanin Website](https://omarxi.github.io/Solanin/)** or grab the latest **`solanin-setup.exe`** / **`solanin-portable.exe`** (Windows) or **`solanin-x86_64.AppImage`** (Linux) from [Releases](https://github.com/omarxi/Solanin/releases).
 
 ## Building from Source
 Requires [Rust](https://rustup.rs/):
