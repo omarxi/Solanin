@@ -5,7 +5,7 @@
 <h1 align="center">Solanin</h1>
 
 <p align="center">
-  A lightweight, cross-platform plugin launcher for <strong>Ages of Conflict: World War Simulator</strong> (Linux AppImage &amp; Windows <code>.exe</code>).
+  A lightweight, cross-platform plugin launcher for <strong>Ages of Conflict: World War Simulator</strong>, built in Rust (Linux AppImage &amp; Windows <code>.exe</code>).
 </p>
 
 <p align="center">
