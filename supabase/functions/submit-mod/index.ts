@@ -154,6 +154,80 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
+    if (action === "update_official") {
+      if (!modIdInput || !(file instanceof File)) {
+        return json({ error: "Mod ID and new .dll/.zip file are required." }, 400);
+      }
+      const { data: perms } = await supabase
+        .from("user_permissions")
+        .select("assigned_official_mod_ids")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      const assigned = Array.isArray(perms?.assigned_official_mod_ids)
+        ? perms.assigned_official_mod_ids
+        : [];
+      if (!assigned.includes(modIdInput)) {
+        return json({ error: "You are not assigned to this official modpack." }, 403);
+      }
+
+      const lowerName = file.name.toLowerCase();
+      if (!lowerName.endsWith(".dll") && !lowerName.endsWith(".zip")) {
+        return json({ error: "Only .dll or .zip mod files are allowed." }, 400);
+      }
+      if (file.size > 25 * 1024 * 1024) {
+        return json({ error: "Official modpack update limit is 25 MB." }, 400);
+      }
+
+      const modBytes = new Uint8Array(await file.arrayBuffer());
+      const sha256 = await sha256Hex(modBytes);
+      const vt = await scanWithVirusTotal(modBytes, file.name, sha256, vtKey);
+      if (vt.pending) {
+        return json({ error: PENDING_MSG, virustotal_url: vt.url }, 202);
+      }
+      if (vt.malicious > 0) {
+        return json(
+          { error: `Update rejected: VirusTotal flagged this file (${vt.malicious}/${vt.total}).`, virustotal_url: vt.url },
+          400,
+        );
+      }
+
+      const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const modPath = `official/${modIdInput}/${safeFileName}`;
+      const { error: upErr } = await supabase.storage
+        .from("community-mods")
+        .upload(modPath, modBytes, { upsert: true, contentType: "application/octet-stream" });
+      if (upErr) {
+        return json({ error: `Storage upload failed: ${upErr.message}` }, 500);
+      }
+      const downloadUrl = `${supabaseUrl}/storage/v1/object/public/community-mods/${modPath}`;
+
+      const { data: existingOv } = await supabase
+        .from("official_mod_overrides")
+        .select("changelog")
+        .eq("mod_id", modIdInput)
+        .maybeSingle();
+      const prevLog = Array.isArray(existingOv?.changelog) ? existingOv.changelog : [];
+      const today = new Date().toISOString().slice(0, 10);
+      const nextLog = notes ? [{ version, date: today, notes }, ...prevLog] : prevLog;
+
+      const { data: ovRow, error: ovErr } = await supabase
+        .from("official_mod_overrides")
+        .upsert({
+          mod_id: modIdInput,
+          version,
+          download_url: downloadUrl,
+          sha256,
+          changelog: nextLog,
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+      if (ovErr) {
+        return json({ error: `Database error: ${ovErr.message}` }, 500);
+      }
+      return json({ ok: true, override: ovRow, virustotal_url: vt.url });
+    }
+
     if (action === "update") {
       if (!modIdInput || !(file instanceof File)) {
         return json({ error: "Mod ID and new .dll/.zip file are required." }, 400);
@@ -302,6 +376,30 @@ Deno.serve(async (req) => {
       }
     }
 
+    const { data: userPerms } = await supabase
+      .from("user_permissions")
+      .select("can_upload_images")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const canUploadImages = Boolean(userPerms?.can_upload_images);
+
+    const previewUrls: string[] = [];
+    if (canUploadImages) {
+      const previewFiles = form.getAll("previews").filter((x): x is File => x instanceof File && x.size > 0);
+      for (const [idx, pf] of previewFiles.slice(0, 4).entries()) {
+        if (pf.size > 5 * 1024 * 1024) continue;
+        const pBytes = new Uint8Array(await pf.arrayBuffer());
+        const safeP = pf.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const pPath = `${id}/preview_${idx}_${safeP}`;
+        const { error: pErr } = await supabase.storage
+          .from("community-mods")
+          .upload(pPath, pBytes, { upsert: true, contentType: pf.type || "image/png" });
+        if (!pErr) {
+          previewUrls.push(`${supabaseUrl}/storage/v1/object/public/community-mods/${pPath}`);
+        }
+      }
+    }
+
     const row = {
       id,
       name,
@@ -312,7 +410,7 @@ Deno.serve(async (req) => {
       instructions,
       download_url: downloadUrl,
       icon_url: iconUrl,
-      previews: [],
+      previews: previewUrls,
       sha256,
       virustotal_url: vt.url,
       vt_malicious: vt.malicious,

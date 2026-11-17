@@ -38,6 +38,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Build Windows EXE
         run: cargo build --release
+      - name: Copy portable EXE
+        run: copy target\release\solanin.exe target\release\solanin-portable.exe
       - name: Build Windows Installer (solanin-setup.exe)
         run: iscc installer\solanin.iss
       - uses: actions/upload-artifact@v4
@@ -45,6 +47,7 @@ jobs:
           name: windows-exe
           path: |
             target/release/solanin.exe
+            target/release/solanin-portable.exe
             target/installer/solanin-setup.exe
 
   create-release:
@@ -61,5 +64,6 @@ jobs:
           files: |
             dist/**/solanin-x86_64.AppImage
             dist/**/solanin.exe
+            dist/**/solanin-portable.exe
             dist/**/solanin-setup.exe
           generate_release_notes: true

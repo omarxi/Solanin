@@ -5,6 +5,17 @@ use std::path::Path;
 use std::time::Duration;
 
 #[derive(Deserialize)]
+struct OfficialModOverride {
+    mod_id: String,
+    version: String,
+    download_url: String,
+    #[serde(default)]
+    sha256: Option<String>,
+    #[serde(default)]
+    changelog: Vec<ReleaseNote>,
+}
+
+#[derive(Deserialize)]
 struct CommunityModRow {
     id: String,
     name: String,
@@ -112,6 +123,32 @@ pub fn fetch_catalog(url: &str, paths: &LauncherPaths) -> Result<ModCatalog, Str
                 .user_agent("Solanin/1.0")
                 .build()
             {
+                let ov_endpoint = format!("{sb_url}/rest/v1/official_mod_overrides?select=*");
+                if let Ok(ov_resp) = client
+                    .get(&ov_endpoint)
+                    .header("apikey", sb_key)
+                    .header("Authorization", format!("Bearer {sb_key}"))
+                    .send()
+                {
+                    if ov_resp.status().is_success() {
+                        if let Ok(overrides) = ov_resp.json::<Vec<OfficialModOverride>>() {
+                            for ov in overrides {
+                                if let Some(m) = catalog.mods.iter_mut().find(|m| m.id == ov.mod_id)
+                                {
+                                    m.version = ov.version;
+                                    m.download_url = ov.download_url;
+                                    m.sha256 = ov.sha256;
+                                    if !ov.changelog.is_empty() {
+                                        let mut merged = ov.changelog;
+                                        merged.extend(m.changelog.clone());
+                                        m.changelog = merged;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 let endpoint = format!(
                     "{sb_url}/rest/v1/community_mods?select=*&order=created_at.desc"
                 );

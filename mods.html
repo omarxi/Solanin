@@ -144,11 +144,17 @@
         <span>Solanin</span>
         <span class="sub">Ages of Conflict</span>
       </a>
-      <div class="nav-links">
+      <div class="nav-links" style="align-items:center;">
         <a href="index.html">Home</a>
         <a href="mods.html" class="active">All Mods</a>
         <a href="https://github.com/omarxi/Solanin/releases/latest" target="_blank" rel="noopener">Releases</a>
         <a href="https://github.com/omarxi/Solanin" target="_blank" rel="noopener">GitHub</a>
+        <span style="width:1px; height:18px; background:var(--border); display:inline-block;"></span>
+        <button class="btn small" id="authBtn" style="display:none;" onclick="openAuthModal()">Sign In / Sign Up</button>
+        <button class="btn small" id="myModsBtn" style="display:none;" onclick="openMyModsModal()">My Mods</button>
+        <button class="btn primary small" id="submitBtn" style="display:none;" onclick="openSubmitModal()">+ Submit a Mod</button>
+        <span id="userLabel" style="display:none; font-size:0.82rem; color:var(--muted);"></span>
+        <button class="btn small" id="signOutBtn" style="display:none;" onclick="signOut()">Sign Out</button>
       </div>
     </div>
   </nav>
@@ -164,10 +170,6 @@
       <div class="toolbar-right">
         <button class="btn small active" id="vGrid" onclick="setView('grid')">Grid</button>
         <button class="btn small" id="vList" onclick="setView('list')">List</button>
-        <button class="btn small" id="authBtn" style="display:none;" onclick="openAuthModal()">Sign In</button>
-        <span id="userLabel" style="display:none; font-size:0.84rem; color:var(--muted);"></span>
-        <button class="btn small" id="signOutBtn" style="display:none;" onclick="signOut()">Sign Out</button>
-        <button class="btn primary small" id="submitBtn" style="display:none;" onclick="openSubmitModal()">+ Submit a Mod</button>
       </div>
     </div>
 
@@ -209,6 +211,10 @@
         <input type="file" name="file" accept=".dll,.zip" required style="color:var(--text);" />
         <label style="font-size:0.84rem; color:var(--muted);">Mod Icon (optional PNG/JPG)</label>
         <input type="file" name="icon" accept="image/*" style="color:var(--text);" />
+        <div id="submitPreviewWrap" style="display:none; flex-direction:column; gap:6px;">
+          <label style="font-size:0.84rem; color:var(--muted);">Preview Images (up to 4, unlocked for your account)</label>
+          <input type="file" name="previews" accept="image/*" multiple style="color:var(--text);" />
+        </div>
         <div id="submitStatus" style="font-size:0.86rem; color:var(--muted);"></div>
         <button class="btn primary" id="submitFormBtn" type="submit">Scan with VirusTotal &amp; Submit</button>
       </form>
@@ -224,6 +230,7 @@
       </div>
       <form id="updateForm" onsubmit="submitModUpdate(event)" style="display:flex; flex-direction:column; gap:10px;">
         <input type="hidden" name="mod_id" id="updModId" />
+        <input type="hidden" name="action" id="updAction" value="update" />
         <input class="search" style="width:100%;" name="version" id="updVersion" placeholder="New Version (e.g. 1.1.0) *" required />
         <textarea class="search" style="width:100%; min-height:85px; font-family:inherit;" name="notes" placeholder="What's changed / hotfixes"></textarea>
         <label style="font-size:0.84rem; color:var(--muted);">New Mod File (.dll or .zip, max 5 MB) *</label>
@@ -231,6 +238,20 @@
         <div id="updateStatus" style="font-size:0.86rem; color:var(--muted);"></div>
         <button class="btn primary" id="updateFormBtn" type="submit">Scan &amp; Publish Update</button>
       </form>
+    </div>
+  </div>
+
+  <!-- My Mods Dashboard Modal -->
+  <div class="backdrop" id="myModsBackdrop" onclick="if (event.target === this) closeModal('myModsBackdrop')">
+    <div class="modal" style="max-width: 640px;">
+      <div class="modal-head">
+        <h3>My Released Mods</h3>
+        <div style="display:flex; gap:8px;">
+          <button class="btn small primary" onclick="closeModal('myModsBackdrop'); openSubmitModal()">+ Submit a Mod</button>
+          <button class="close-btn" onclick="closeModal('myModsBackdrop')">Close</button>
+        </div>
+      </div>
+      <div id="myModsList" style="display:flex; flex-direction:column; gap:10px;"></div>
     </div>
   </div>
 
@@ -264,21 +285,49 @@
     let supabaseAnonKey = "";
     let sbClient = null;
     let currentSession = null;
+    let userPerms = { can_upload_images: false, assigned_official_mod_ids: [] };
 
-    function updateAuthUI() {
+    async function loadUserPermissions() {
+      userPerms = { can_upload_images: false, assigned_official_mod_ids: [] };
+      if (!sbClient || !currentSession?.user) return;
+      try {
+        const { data } = await sbClient
+          .from("user_permissions")
+          .select("can_upload_images, assigned_official_mod_ids")
+          .eq("user_id", currentSession.user.id)
+          .maybeSingle();
+        if (data) {
+          userPerms = {
+            can_upload_images: Boolean(data.can_upload_images),
+            assigned_official_mod_ids: Array.isArray(data.assigned_official_mod_ids)
+              ? data.assigned_official_mod_ids
+              : []
+          };
+        }
+      } catch (_) {}
+      const wrap = document.getElementById("submitPreviewWrap");
+      if (wrap) wrap.style.display = userPerms.can_upload_images ? "flex" : "none";
+    }
+
+    async function updateAuthUI() {
       const authBtn = document.getElementById("authBtn");
+      const myModsBtn = document.getElementById("myModsBtn");
       const userLabel = document.getElementById("userLabel");
       const signOutBtn = document.getElementById("signOutBtn");
       if (!sbClient) return;
       if (currentSession?.user) {
         authBtn.style.display = "none";
+        myModsBtn.style.display = "inline-flex";
         userLabel.style.display = "inline";
         userLabel.textContent = currentSession.user.email || "Signed in";
         signOutBtn.style.display = "inline-flex";
+        await loadUserPermissions();
       } else {
         authBtn.style.display = "inline-flex";
+        myModsBtn.style.display = "none";
         userLabel.style.display = "none";
         signOutBtn.style.display = "none";
+        userPerms = { can_upload_images: false, assigned_official_mod_ids: [] };
       }
       renderMods();
     }
@@ -308,7 +357,35 @@
       supabaseAnonKey = (baseData.supabase_anon_key || "").trim();
 
       if (supabaseUrl && supabaseAnonKey) {
+        document.getElementById("submitBtn").style.display = "inline-flex";
+        if (!sbClient && window.supabase) {
+          sbClient = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+          const { data } = await sbClient.auth.getSession();
+          currentSession = data?.session || null;
+          sbClient.auth.onAuthStateChange((_ev, sess) => {
+            currentSession = sess;
+            updateAuthUI();
+          });
+          updateAuthUI();
+        }
         try {
+          const ovRes = await fetch(`${supabaseUrl}/rest/v1/official_mod_overrides?select=*`, {
+            headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` }
+          });
+          if (ovRes.ok) {
+            const ovs = await ovRes.json();
+            for (const ov of ovs) {
+              const target = mods.find((m) => m.id === ov.mod_id);
+              if (target) {
+                target.version = ov.version;
+                target.download_url = ov.download_url;
+                target.sha256 = ov.sha256;
+                if (Array.isArray(ov.changelog) && ov.changelog.length) {
+                  target.changelog = [...ov.changelog, ...(target.changelog || [])];
+                }
+              }
+            }
+          }
           const sbRes = await fetch(
             `${supabaseUrl}/rest/v1/community_mods?select=*&order=created_at.desc`,
             {
@@ -401,11 +478,6 @@
               ${viewMode === "grid" && m.summary ? `<p class="mod-summary" style="margin-top:10px;">${escapeHtml(m.summary)}</p>` : ""}
             </div>
             <div class="mod-actions">
-              ${m.user_submitted && m.virustotal_url ? `<a class="btn small" href="${escapeAttr(m.virustotal_url)}" target="_blank" rel="noopener">VirusTotal</a>` : ""}
-              ${m.user_submitted && currentSession?.user && m.owner_id === currentSession.user.id ? `
-                <button class="btn small" onclick="openUpdateModal(${idx})">Release Update</button>
-                <button class="btn small" style="border-color:#ef4444; color:#f87171;" onclick="deleteOwnMod(${idx})">Delete</button>
-              ` : ""}
               <button class="btn small" onclick="openDetail(${idx})">Details</button>
               <button class="btn small primary" onclick="promptInstall(${idx})">Install</button>
             </div>
@@ -485,6 +557,46 @@
       document.getElementById("installBackdrop").classList.add("open");
     }
 
+    function openMyModsModal() {
+      if (!currentSession?.user) {
+        openAuthModal();
+        return;
+      }
+      const listEl = document.getElementById("myModsList");
+      const mine = mods
+        .map((m, idx) => ({ m, idx }))
+        .filter(({ m }) =>
+          (m.user_submitted && m.owner_id === currentSession.user.id) ||
+          (!m.user_submitted && userPerms.assigned_official_mod_ids.includes(m.id))
+        );
+      if (!mine.length) {
+        listEl.innerHTML = `<p style="color:var(--muted); margin:8px 0;">You haven't released or been assigned any mods yet.</p>`;
+      } else {
+        listEl.innerHTML = mine.map(({ m, idx }) => `
+          <div class="mod-card" style="flex-direction:row; align-items:center; flex-wrap:wrap;">
+            <div style="flex:1; min-width:200px;">
+              <div class="mod-top">
+                <img class="mod-icon" src="${escapeAttr(firstThumb(m))}" alt="" />
+                <div>
+                  <h4 class="mod-title">${escapeHtml(m.name)}</h4>
+                  <div class="mod-meta">
+                    v${escapeHtml(m.version)}
+                    ${!m.user_submitted ? ` · <strong style="color:var(--blue);">Assigned Official</strong>` : ""}
+                    ${m.virustotal_url ? ` · <a href="${escapeAttr(m.virustotal_url)}" target="_blank" rel="noopener" style="color:var(--blue);">VirusTotal</a>` : ""}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="mod-actions">
+              <button class="btn small" onclick="closeModal('myModsBackdrop'); openUpdateModal(${idx})">Release Update</button>
+              ${m.user_submitted ? `<button class="btn small" style="border-color:#ef4444; color:#f87171;" onclick="deleteOwnMod(${idx})">Delete</button>` : ""}
+            </div>
+          </div>
+        `).join("");
+      }
+      document.getElementById("myModsBackdrop").classList.add("open");
+    }
+
     function openAuthModal() {
       document.getElementById("authStatus").textContent = "";
       document.getElementById("authBackdrop").classList.add("open");
@@ -537,6 +649,7 @@
       if (!m) return;
       document.getElementById("updateTitle").textContent = `Update ${m.name}`;
       document.getElementById("updModId").value = m.id;
+      document.getElementById("updAction").value = m.user_submitted ? "update" : "update_official";
       document.getElementById("updVersion").value = m.version;
       document.getElementById("updateStatus").textContent = "";
       document.getElementById("updateBackdrop").classList.add("open");
@@ -593,11 +706,12 @@
       try {
         if (!currentSession?.access_token) throw new Error("Please sign in first.");
         const file = form.file?.files?.[0];
-        if (file && file.size > 5 * 1024 * 1024) {
-          throw new Error("File is larger than the 5 MB limit.");
+        const isOfficial = form.action?.value === "update_official";
+        const maxBytes = (isOfficial ? 25 : 5) * 1024 * 1024;
+        if (file && file.size > maxBytes) {
+          throw new Error(`File is larger than the ${isOfficial ? 25 : 5} MB limit.`);
         }
         const fd = new FormData(form);
-        fd.append("action", "update");
         const res = await fetch(`${supabaseUrl}/functions/v1/submit-mod`, {
           method: "POST",
           headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${currentSession.access_token}` },
@@ -634,6 +748,9 @@
         const data = await res.json();
         if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
         await loadCatalog();
+        if (document.getElementById("myModsBackdrop").classList.contains("open")) {
+          openMyModsModal();
+        }
       } catch (e) {
         alert(e.message);
       }
