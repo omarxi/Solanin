@@ -231,6 +231,29 @@
       "tags": [],
       "updated_at": "2026-11-18",
       "changelog": []
+    },
+    {
+      "id": "Echos-Fortifications",
+      "name": "Echo's Fortifications",
+      "version": "1.0.1",
+      "author": "Echo",
+      "summary": "Fortifications 1.0.1 adds a full gold economy, monthly upkeep, AI fortification building, per-level balance presets, an Eraser tool, and a visual map/UI overhaul across 6 languages.",
+      "description": "Fortifications 1.0.1 — Changelog\n\nEconomy:\n• Building now costs gold from the country's real treasury (1 gold at Level 1 up to 65 at Level 10); upgrading only charges the level difference.\n• New \"Charge gold for building\" toggle (enabled by default), plus a 25–400% price multiplier.\n• Operations (Brush, Border, Country) preview their cost in advance, build as many tiles as the treasury can afford, and refund gold on Undo.\n\nFortification Upkeep:\n• New monthly upkeep toggle (off by default)—costs scale with tile count and fortification levels.\n• If a country runs out of gold, part of its fortifications will degrade by one level.\n\nAI Builds Fortifications:\n• New AI toggle (off by default; requires gold charging enabled).\n• AI only builds during wars with neighbors (never in peacetime), keeps a treasury reserve, reacts with realistic delays, and mainly builds Level 1–4 forts (with a small chance for Level 5–7) rather than fortifying entire borders.\n\nBalance:\n• New Balance tab with individual breakthrough-chance sliders for every level, durability-per-level settings, and presets (Soft, Balanced, Hard, Impregnable).\n\nTools:\n• New Eraser tool to remove fortifications for the selected country, plus Erase buttons for Border and Country tools.\n• Brush, Border, and Country now only upgrade tiles up to the chosen level.\n\nVisuals & Panel:\n• Redesigned panel matching the game's dark navy & gold style with a treasury coin indicator and animated gold accent line.\n• Redrawn fortification map overlay with translucent hatched fills, glowing zone outlines, attack-repel tile flashes, cursor frame, pulsing brush ring, price tooltip, and a toggleable corner legend.\n• Five tabs: Build, Overview (with monthly upkeep & AI stats), Economy (treasury, income, toggles, price/upkeep table), Balance, and Options.\n• Translated into 6 languages: EN, RU, ES, DE, FR, and 中文.",
+      "instructions": "",
+      "download_url": "https://raw.githubusercontent.com/omarxi/solanin/main/mods/EchosFortifications.dll",
+      "icon_url": null,
+      "previews": [
+        "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/2026-11-16_201855.png"
+      ],
+      "image_url": null,
+      "video_url": null,
+      "sha256": null,
+      "install_target": "bepinex_plugins",
+      "tags": [
+        "P to open the menu"
+      ],
+      "updated_at": "2026-11-18",
+      "changelog": []
     }
   ],
   "supabase_url": "https://uwuajzanitbpfocyhhcu.supabase.co",
