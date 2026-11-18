@@ -218,7 +218,7 @@
       "author": "neotrit",
       "summary": "A simple mod that adds the ability to select cities. To use it, hold Shift and drag a box over the cities you want to select. After that, you can choose their rightful owner. The mod is translated into English and Russian.",
       "description": "",
-      "instructions": "",
+      "instructions": "To use it, hold Shift and drag a box over the cities you want to select",
       "download_url": "https://raw.githubusercontent.com/omarxi/solanin/main/mods/AocCitySelection.dll",
       "icon_url": null,
       "previews": [
