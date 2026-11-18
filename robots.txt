@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://omarxi.github.io/Solanin/sitemap.xml
