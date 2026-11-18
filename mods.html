@@ -266,7 +266,7 @@
         <button class="close-btn" onclick="closeModal('authBackdrop')">Close</button>
       </div>
       <p style="margin-top:0; color:var(--muted); font-size:0.86rem;">
-        Sign in to submit community mods and release updates for your own mods.
+        Sign in to submit community mods and release updates for your own mods. Accounts and logins are managed securely by Supabase.
       </p>
       <div style="display:flex; flex-direction:column; gap:10px;">
         <input class="search" style="width:100%;" id="authEmail" type="email" placeholder="Email *" />
@@ -477,7 +477,7 @@
                   <h3 class="mod-title">${escapeHtml(m.name)}</h3>
                   <div class="mod-meta">
                     v${escapeHtml(m.version)}${m.author ? " · " + escapeHtml(m.author) : ""}
-                    ${m.user_submitted ? ` · <strong style="color:var(--amber);">COMMUNITY MADE</strong>` : ""}
+                    ${m.user_submitted ? ` · <strong style="color:var(--amber);">COMMUNITY UPLOADED</strong>` : ""}
                   </div>
                 </div>
               </div>
@@ -527,7 +527,7 @@
         </div>
         ${m.user_submitted ? `
           <div style="margin-bottom:10px;">
-            <strong style="color:var(--amber);">COMMUNITY MADE</strong>
+            <strong style="color:var(--amber);">COMMUNITY UPLOADED</strong>
             ${m.virustotal_url ? ` · <a href="${escapeAttr(m.virustotal_url)}" target="_blank" rel="noopener" style="color:var(--blue); text-decoration:underline;">VirusTotal Scan</a>` : ""}
           </div>
         ` : ""}
@@ -548,7 +548,7 @@
           <h3>Install ${escapeHtml(m.name)}</h3>
           <button class="close-btn" onclick="closeModal('installBackdrop')">Close</button>
         </div>
-        ${m.user_submitted ? `<div style="margin-bottom:10px;"><strong style="color:var(--amber);">COMMUNITY MADE</strong>${m.virustotal_url ? ` · <a href="${escapeAttr(m.virustotal_url)}" target="_blank" rel="noopener" style="color:var(--blue); text-decoration:underline;">VirusTotal</a>` : ""}</div>` : ""}
+        ${m.user_submitted ? `<div style="margin-bottom:10px;"><strong style="color:var(--amber);">COMMUNITY UPLOADED</strong>${m.virustotal_url ? ` · <a href="${escapeAttr(m.virustotal_url)}" target="_blank" rel="noopener" style="color:var(--blue); text-decoration:underline;">VirusTotal</a>` : ""}</div>` : ""}
         <p style="margin-top:0; color:#cfd5e0; font-size:0.93rem;">
           Want to install the <strong>Solanin</strong> app instead? It automatically installs BepInEx, keeps your plugins updated, and lets you enable or disable them anytime.
         </p>

@@ -1,6 +1,7 @@
-use crate::models::{InstalledMod, LauncherConfig, ModEntry};
+use crate::models::{AppState, InstallTarget, InstalledMod, LauncherConfig, ModCatalog, ModEntry};
 use crate::paths::{resolve_target_dir, LauncherPaths};
 use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 use std::io::Cursor;
 use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
@@ -304,4 +305,178 @@ pub fn uninstall_mod(installed: &mut InstalledMod) -> Result<(), String> {
             .map_err(|e| format!("Failed to delete staged mod files: {e}"))?;
     }
     Ok(())
+}
+
+/// Scans `BepInEx/plugins` for existing `.dll` files not yet tracked by Solanin,
+/// matching them to catalog entries by filename when possible.
+pub fn import_untracked_plugins(
+    paths: &LauncherPaths,
+    state: &mut AppState,
+    catalog: &ModCatalog,
+) -> usize {
+    let Some(ref game_dir) = state.config.game_dir else {
+        return 0;
+    };
+    let plugins_dir = game_dir.join("BepInEx").join("plugins");
+    if !plugins_dir.exists() {
+        return 0;
+    }
+
+    let tracked: HashSet<PathBuf> = state
+        .installed
+        .values()
+        .flat_map(|m| m.deployed_files.iter().cloned())
+        .collect();
+
+    let Ok(entries) = std::fs::read_dir(&plugins_dir) else {
+        return 0;
+    };
+
+    let mut imported = 0usize;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let is_dll = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("dll"))
+            .unwrap_or(false);
+        if !is_dll || tracked.contains(&path) {
+            continue;
+        }
+
+        let Some(fname) = path.file_name().and_then(|s| s.to_str()).map(str::to_string) else {
+            continue;
+        };
+        let stem = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("plugin")
+            .to_string();
+
+        // Try matching by filename against catalog entries (handling URL-encoded %20)
+        let matched = catalog.mods.iter().find(|m| {
+            let cat_fname = filename_from_url(&m.download_url, &m.id).replace("%20", " ");
+            !state.installed.contains_key(&m.id) && cat_fname.eq_ignore_ascii_case(&fname)
+        });
+
+        let (id, name, version, author, description, instructions, install_target) =
+            if let Some(m) = matched {
+                (
+                    m.id.clone(),
+                    m.name.clone(),
+                    m.version.clone(),
+                    m.author.clone(),
+                    m.description.clone(),
+                    m.instructions.clone(),
+                    m.install_target.clone(),
+                )
+            } else {
+                let local_id = format!("local-{}", sanitize_id(&stem).to_lowercase());
+                if state.installed.contains_key(&local_id) {
+                    continue;
+                }
+                (
+                    local_id,
+                    stem,
+                    "local".to_string(),
+                    "Local".to_string(),
+                    String::new(),
+                    String::new(),
+                    InstallTarget::BepInExPlugins,
+                )
+            };
+
+        let staging_dir = paths.staging_root.join(sanitize_id(&id));
+        if std::fs::create_dir_all(&staging_dir).is_err() {
+            continue;
+        }
+        let staged_file = staging_dir.join(&fname);
+        if std::fs::copy(&path, &staged_file).is_err() {
+            continue;
+        }
+
+        state.installed.insert(
+            id.clone(),
+            InstalledMod {
+                id,
+                name,
+                version,
+                author,
+                description,
+                instructions,
+                install_target,
+                enabled: true,
+                staging_dir,
+                deployed_files: vec![path],
+            },
+        );
+        imported += 1;
+    }
+
+    imported
+}
+
+fn normalize_match_key(s: &str) -> String {
+    s.chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .flat_map(|c| c.to_lowercase())
+        .collect()
+}
+
+/// Finds a catalog entry matching an unlinked (e.g. `local-*`) installed mod,
+/// preferring official (`!user_submitted`) entries so users can switch to its updates.
+pub fn find_catalog_match<'a>(
+    inst: &InstalledMod,
+    catalog: &'a ModCatalog,
+) -> Option<&'a ModEntry> {
+    if catalog.mods.iter().any(|m| m.id == inst.id) {
+        return None;
+    }
+
+    let mut local_files: Vec<String> = inst
+        .deployed_files
+        .iter()
+        .filter_map(|p| p.file_name().and_then(|s| s.to_str()).map(str::to_string))
+        .collect();
+    if local_files.is_empty() {
+        if let Ok(entries) = std::fs::read_dir(&inst.staging_dir) {
+            for e in entries.flatten() {
+                if let Some(name) = e.file_name().to_str() {
+                    local_files.push(name.to_string());
+                }
+            }
+        }
+    }
+
+    let inst_name_norm = normalize_match_key(&inst.name);
+    let matches_entry = |m: &ModEntry| -> bool {
+        let cat_fname = filename_from_url(&m.download_url, &m.id).replace("%20", " ");
+        if local_files.iter().any(|f| f.eq_ignore_ascii_case(&cat_fname)) {
+            return true;
+        }
+        let cat_name_norm = normalize_match_key(&m.name);
+        let cat_id_norm = normalize_match_key(&m.id);
+        if !inst_name_norm.is_empty()
+            && (inst_name_norm == cat_name_norm || inst_name_norm == cat_id_norm)
+        {
+            return true;
+        }
+        local_files.iter().any(|f| {
+            let stem = Path::new(f)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("");
+            let stem_norm = normalize_match_key(stem);
+            !stem_norm.is_empty() && (stem_norm == cat_name_norm || stem_norm == cat_id_norm)
+        })
+    };
+
+    catalog
+        .mods
+        .iter()
+        .find(|m| !m.user_submitted && matches_entry(m))
+        .or_else(|| catalog.mods.iter().find(|m| matches_entry(m)))
 }

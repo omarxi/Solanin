@@ -1,10 +1,13 @@
 use crate::catalog::{fetch_catalog, load_cached_catalog, load_state, save_state};
 use crate::mod_manager::{
-    disable_mod, enable_mod, install_bepinex, install_mod, is_bepinex_installed, uninstall_mod,
+    disable_mod, enable_mod, find_catalog_match, import_untracked_plugins, install_bepinex,
+    install_mod, is_bepinex_installed, uninstall_mod,
 };
 use crate::models::{AppState, InstallTarget, InstalledMod, ModCatalog, ModEntry, STEAM_APP_ID};
 use crate::paths::{detect_game_dir, LauncherPaths};
-use crate::updater::{apply_update_and_restart, check_for_update, AppUpdateInfo};
+use crate::updater::{
+    apply_update_and_restart, check_for_update, take_post_update_notes, AppUpdateInfo,
+};
 use eframe::egui::{self, Color32, RichText, Rounding, Stroke};
 use std::collections::{HashMap, HashSet};
 use std::io::Cursor;
@@ -87,6 +90,8 @@ pub struct ModLauncherApp {
     install_popup: Option<(String, String)>,
     available_update: Option<AppUpdateInfo>,
     updating_app: bool,
+    update_confirm_open: bool,
+    post_update_notes: Option<(String, String)>,
     warning_mod: Option<ModEntry>,
 }
 
@@ -179,6 +184,8 @@ impl ModLauncherApp {
                     .load_texture("solanin_logo", color_img, egui::TextureOptions::LINEAR)
             });
 
+        let post_update_notes = take_post_update_notes(&paths.data_dir);
+
         let mut app = Self {
             paths,
             state,
@@ -201,10 +208,16 @@ impl ModLauncherApp {
             install_popup: None,
             available_update: None,
             updating_app: false,
+            update_confirm_open: false,
+            post_update_notes,
             warning_mod: None,
         };
 
-        let _ = save_state(&app.paths, &app.state);
+        if import_untracked_plugins(&app.paths, &mut app.state, &app.catalog) > 0 {
+            let _ = save_state(&app.paths, &app.state);
+        } else {
+            let _ = save_state(&app.paths, &app.state);
+        }
         app.trigger_fetch_catalog(cc.egui_ctx.clone());
         app.trigger_check_app_update(cc.egui_ctx.clone());
         if let Some(ref game_dir) = app.state.config.game_dir.clone() {
@@ -279,9 +292,10 @@ impl ModLauncherApp {
         }
         self.updating_app = true;
         self.status_message = format!("Downloading Solanin {}...", info.version);
+        let data_dir = self.paths.data_dir.clone();
         let tx = self.tx.clone();
         std::thread::spawn(move || {
-            if let Err(e) = apply_update_and_restart(&info) {
+            if let Err(e) = apply_update_and_restart(&info, &data_dir) {
                 let _ = tx.send(WorkerMsg::AppUpdateFailed(e));
                 ctx.request_repaint();
             }
@@ -396,7 +410,19 @@ impl ModLauncherApp {
                     self.busy = false;
                     let count = cat.mods.len();
                     self.catalog = cat;
-                    self.status_message = format!("{count} plugins loaded");
+                    let imported = import_untracked_plugins(
+                        &self.paths,
+                        &mut self.state,
+                        &self.catalog,
+                    );
+                    if imported > 0 {
+                        let _ = save_state(&self.paths, &self.state);
+                        self.status_message = format!(
+                            "{count} plugins loaded · imported {imported} existing plugin(s)"
+                        );
+                    } else {
+                        self.status_message = format!("{count} plugins loaded");
+                    }
                     if self.selected_catalog_id.is_none() {
                         self.selected_catalog_id = self.catalog.mods.first().map(|m| m.id.clone());
                     }
@@ -578,7 +604,7 @@ impl ModLauncherApp {
                                 )
                                 .clicked()
                             {
-                                self.trigger_apply_app_update(info, ctx.clone());
+                                self.update_confirm_open = true;
                             }
                         }
                     });
@@ -662,6 +688,18 @@ impl ModLauncherApp {
                     ui.selectable_value(&mut self.browse_filter, BrowseFilter::Community, "Community");
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .button(
+                                RichText::new("Want to upload your own mod? Visit the website")
+                                    .size(12.5),
+                            )
+                            .clicked()
+                        {
+                            ctx.open_url(egui::OpenUrl::new_tab(
+                                "https://omarxi.github.io/Solanin/mods.html",
+                            ));
+                        }
+                        ui.separator();
                         ui.selectable_value(&mut self.browse_view, BrowseView::Grid, "Grid");
                         ui.selectable_value(&mut self.browse_view, BrowseView::List, "List");
                     });
@@ -737,7 +775,7 @@ impl ModLauncherApp {
                                                         egui::Label::new(
                                                             RichText::new(&m.name)
                                                                 .strong()
-                                                                .size(14.0)
+                                                                .size(16.0)
                                                                 .color(TEXT_PRIMARY),
                                                         )
                                                         .wrap(),
@@ -749,13 +787,13 @@ impl ModLauncherApp {
                                                     ui.horizontal_wrapped(|ui| {
                                                         ui.label(
                                                             RichText::new(meta)
-                                                                .small()
+                                                                .size(12.5)
                                                                 .color(TEXT_MUTED),
                                                         );
                                                         if m.user_submitted {
                                                             ui.label(
                                                                 RichText::new("Community")
-                                                                    .small()
+                                                                    .size(12.5)
                                                                     .color(ACCENT_AMBER),
                                                             );
                                                         }
@@ -775,7 +813,7 @@ impl ModLauncherApp {
                                                 ui.add(
                                                     egui::Label::new(
                                                         RichText::new(short_sum)
-                                                            .small()
+                                                            .size(13.0)
                                                             .color(TEXT_MUTED),
                                                     )
                                                     .wrap(),
@@ -1027,7 +1065,7 @@ impl ModLauncherApp {
                             ui.label(RichText::new(sub).color(TEXT_MUTED));
                             if m.user_submitted {
                                 ui.label(
-                                    RichText::new("COMMUNITY MADE")
+                                    RichText::new("COMMUNITY UPLOADED")
                                         .small()
                                         .strong()
                                         .color(ACCENT_AMBER),
@@ -1312,6 +1350,29 @@ impl ModLauncherApp {
                                         if ui.add(primary_button(lbl, col)).clicked() {
                                             self.toggle_mod_enabled(&id);
                                         }
+                                        if let Some(cat_match) =
+                                            find_catalog_match(&inst, &self.catalog).cloned()
+                                        {
+                                            let switch_lbl = if cat_match.user_submitted {
+                                                "Switch to Catalog"
+                                            } else {
+                                                "Switch to Official"
+                                            };
+                                            if ui
+                                                .add_enabled(
+                                                    !self.busy,
+                                                    primary_button(switch_lbl, ACCENT_BLUE),
+                                                )
+                                                .on_hover_text(format!(
+                                                    "Switch from local plugin to {} v{} so it receives updates",
+                                                    cat_match.name, cat_match.version
+                                                ))
+                                                .clicked()
+                                            {
+                                                self.handle_uninstall(&id);
+                                                self.trigger_install_mod(cat_match, ctx.clone());
+                                            }
+                                        }
                                     },
                                 );
                             });
@@ -1372,6 +1433,14 @@ impl ModLauncherApp {
                             };
                             match save_state(&self.paths, &self.state) {
                                 Ok(()) => {
+                                    let imported = import_untracked_plugins(
+                                        &self.paths,
+                                        &mut self.state,
+                                        &self.catalog,
+                                    );
+                                    if imported > 0 {
+                                        let _ = save_state(&self.paths, &self.state);
+                                    }
                                     self.status_message = "Settings saved".to_string();
                                     if let Some(ref game_dir) = self.state.config.game_dir.clone() {
                                         if !is_bepinex_installed(game_dir) {
@@ -1476,6 +1545,113 @@ impl ModLauncherApp {
                 self.warning_mod = None;
             }
         }
+
+        if self.update_confirm_open {
+            if let Some(info) = self.available_update.clone() {
+                let mut close = false;
+                let mut start_update = false;
+                egui::Window::new(format!("Update Available — {}", info.version))
+                    .collapsible(false)
+                    .resizable(false)
+                    .frame(
+                        egui::Frame::window(&ctx.style())
+                            .fill(BG_PANEL)
+                            .stroke(Stroke::new(1.0_f32, ACCENT_AMBER))
+                            .rounding(Rounding::same(10.0))
+                            .inner_margin(egui::Margin::same(16.0)),
+                    )
+                    .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                    .show(ctx, |ui| {
+                        ui.set_min_width(380.0);
+                        ui.set_max_width(480.0);
+                        ui.label(
+                            RichText::new(format!(
+                                "A new version of Solanin ({}) is ready to install.",
+                                info.version
+                            ))
+                            .strong(),
+                        );
+                        if !info.body.trim().is_empty() {
+                            ui.add_space(8.0);
+                            ui.label(RichText::new("Release Notes:").strong().color(ACCENT_BLUE));
+                            egui::ScrollArea::vertical()
+                                .max_height(220.0)
+                                .show(ui, |ui| {
+                                    ui.label(RichText::new(info.body.trim()).color(TEXT_PRIMARY));
+                                });
+                        }
+                        ui.add_space(12.0);
+                        if self.updating_app {
+                            ui.horizontal(|ui| {
+                                ui.spinner();
+                                ui.label("Downloading update and restarting Solanin...");
+                            });
+                        } else {
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if ui
+                                    .add(primary_button("Download & Restart", ACCENT_AMBER))
+                                    .clicked()
+                                {
+                                    start_update = true;
+                                }
+                                if ui.button("Cancel").clicked() {
+                                    close = true;
+                                }
+                            });
+                        }
+                    });
+                if start_update {
+                    self.trigger_apply_app_update(info, ctx.clone());
+                }
+                if close {
+                    self.update_confirm_open = false;
+                }
+            } else {
+                self.update_confirm_open = false;
+            }
+        }
+
+        if let Some((ver, notes)) = self.post_update_notes.clone() {
+            let mut close = false;
+            egui::Window::new(format!("Solanin Updated to {ver}"))
+                .collapsible(false)
+                .resizable(false)
+                .frame(
+                    egui::Frame::window(&ctx.style())
+                        .fill(BG_PANEL)
+                        .stroke(Stroke::new(1.0_f32, ACCENT_GREEN))
+                        .rounding(Rounding::same(10.0))
+                        .inner_margin(egui::Margin::same(16.0)),
+                )
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.set_min_width(380.0);
+                    ui.set_max_width(480.0);
+                    ui.label(
+                        RichText::new(format!("Successfully updated to Solanin {ver}!"))
+                            .strong()
+                            .color(ACCENT_GREEN),
+                    );
+                    if !notes.trim().is_empty() {
+                        ui.add_space(8.0);
+                        ui.label(RichText::new("What's New:").strong());
+                        egui::ScrollArea::vertical()
+                            .max_height(240.0)
+                            .show(ui, |ui| {
+                                ui.label(RichText::new(notes.trim()).color(TEXT_PRIMARY));
+                            });
+                    }
+                    ui.add_space(12.0);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.add(primary_button("Awesome", ACCENT_BLUE)).clicked() {
+                            close = true;
+                        }
+                    });
+                });
+            if close {
+                self.post_update_notes = None;
+            }
+        }
     }
 }
 
@@ -1576,6 +1752,113 @@ impl eframe::App for ModLauncherApp {
             }
             if close {
                 self.warning_mod = None;
+            }
+        }
+
+        if self.update_confirm_open {
+            if let Some(info) = self.available_update.clone() {
+                let mut close = false;
+                let mut start_update = false;
+                egui::Window::new(format!("Update Available — {}", info.version))
+                    .collapsible(false)
+                    .resizable(false)
+                    .frame(
+                        egui::Frame::window(&ctx.style())
+                            .fill(BG_PANEL)
+                            .stroke(Stroke::new(1.0_f32, ACCENT_AMBER))
+                            .rounding(Rounding::same(10.0))
+                            .inner_margin(egui::Margin::same(16.0)),
+                    )
+                    .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                    .show(ctx, |ui| {
+                        ui.set_min_width(380.0);
+                        ui.set_max_width(480.0);
+                        ui.label(
+                            RichText::new(format!(
+                                "A new version of Solanin ({}) is ready to install.",
+                                info.version
+                            ))
+                            .strong(),
+                        );
+                        if !info.body.trim().is_empty() {
+                            ui.add_space(8.0);
+                            ui.label(RichText::new("Release Notes:").strong().color(ACCENT_BLUE));
+                            egui::ScrollArea::vertical()
+                                .max_height(220.0)
+                                .show(ui, |ui| {
+                                    ui.label(RichText::new(info.body.trim()).color(TEXT_PRIMARY));
+                                });
+                        }
+                        ui.add_space(12.0);
+                        if self.updating_app {
+                            ui.horizontal(|ui| {
+                                ui.spinner();
+                                ui.label("Downloading update and restarting Solanin...");
+                            });
+                        } else {
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if ui
+                                    .add(primary_button("Download & Restart", ACCENT_AMBER))
+                                    .clicked()
+                                {
+                                    start_update = true;
+                                }
+                                if ui.button("Cancel").clicked() {
+                                    close = true;
+                                }
+                            });
+                        }
+                    });
+                if start_update {
+                    self.trigger_apply_app_update(info, ctx.clone());
+                }
+                if close {
+                    self.update_confirm_open = false;
+                }
+            } else {
+                self.update_confirm_open = false;
+            }
+        }
+
+        if let Some((ver, notes)) = self.post_update_notes.clone() {
+            let mut close = false;
+            egui::Window::new(format!("Solanin Updated to {ver}"))
+                .collapsible(false)
+                .resizable(false)
+                .frame(
+                    egui::Frame::window(&ctx.style())
+                        .fill(BG_PANEL)
+                        .stroke(Stroke::new(1.0_f32, ACCENT_GREEN))
+                        .rounding(Rounding::same(10.0))
+                        .inner_margin(egui::Margin::same(16.0)),
+                )
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.set_min_width(380.0);
+                    ui.set_max_width(480.0);
+                    ui.label(
+                        RichText::new(format!("Successfully updated to Solanin {ver}!"))
+                            .strong()
+                            .color(ACCENT_GREEN),
+                    );
+                    if !notes.trim().is_empty() {
+                        ui.add_space(8.0);
+                        ui.label(RichText::new("What's New:").strong());
+                        egui::ScrollArea::vertical()
+                            .max_height(240.0)
+                            .show(ui, |ui| {
+                                ui.label(RichText::new(notes.trim()).color(TEXT_PRIMARY));
+                            });
+                    }
+                    ui.add_space(12.0);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.add(primary_button("Awesome", ACCENT_BLUE)).clicked() {
+                            close = true;
+                        }
+                    });
+                });
+            if close {
+                self.post_update_notes = None;
             }
         }
     }

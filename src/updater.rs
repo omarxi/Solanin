@@ -6,6 +6,7 @@ const RELEASES_LATEST_API: &str = "https://api.github.com/repos/omarxi/Solanin/r
 #[derive(Debug, Clone)]
 pub struct AppUpdateInfo {
     pub version: String,
+    pub body: String,
     pub html_url: String,
     pub appimage_url: Option<String>,
     pub exe_url: Option<String>,
@@ -15,6 +16,8 @@ pub struct AppUpdateInfo {
 #[derive(Deserialize)]
 struct GhRelease {
     tag_name: String,
+    #[serde(default)]
+    body: String,
     html_url: String,
     #[serde(default)]
     assets: Vec<GhAsset>,
@@ -82,6 +85,7 @@ pub fn check_for_update() -> Result<Option<AppUpdateInfo>, String> {
 
     Ok(Some(AppUpdateInfo {
         version: rel.tag_name,
+        body: rel.body,
         html_url: rel.html_url,
         appimage_url,
         exe_url,
@@ -105,7 +109,30 @@ fn download_file(url: &str) -> Result<Vec<u8>, String> {
         .map_err(|e| e.to_string())
 }
 
-pub fn apply_update_and_restart(info: &AppUpdateInfo) -> Result<(), String> {
+pub fn save_post_update_notes(data_dir: &std::path::Path, version: &str, body: &str) {
+    let path = data_dir.join("just_updated.json");
+    let payload = serde_json::json!({
+        "version": version,
+        "body": body,
+    });
+    let _ = std::fs::write(path, payload.to_string());
+}
+
+pub fn take_post_update_notes(data_dir: &std::path::Path) -> Option<(String, String)> {
+    let path = data_dir.join("just_updated.json");
+    let content = std::fs::read_to_string(&path).ok()?;
+    let _ = std::fs::remove_file(&path);
+    let val: serde_json::Value = serde_json::from_str(&content).ok()?;
+    let version = val.get("version")?.as_str()?.to_string();
+    let body = val.get("body").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    Some((version, body))
+}
+
+pub fn apply_update_and_restart(
+    info: &AppUpdateInfo,
+    data_dir: &std::path::Path,
+) -> Result<(), String> {
+    save_post_update_notes(data_dir, &info.version, &info.body);
     #[cfg(target_os = "linux")]
     {
         if let Ok(appimage) = std::env::var("APPIMAGE") {
