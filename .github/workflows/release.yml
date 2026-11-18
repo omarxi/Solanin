@@ -46,7 +46,6 @@ jobs:
         with:
           name: windows-exe
           path: |
-            target/release/solanin.exe
             target/release/solanin-portable.exe
             target/installer/solanin-setup.exe
 
@@ -63,7 +62,6 @@ jobs:
         with:
           files: |
             dist/**/solanin-x86_64.AppImage
-            dist/**/solanin.exe
             dist/**/solanin-portable.exe
             dist/**/solanin-setup.exe
           generate_release_notes: true
