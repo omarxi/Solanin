@@ -260,6 +260,28 @@
           "notes": "FORTIFICATIONS 1.0.2 — CHANGELOG\n=================================\n\nAI BUILDING\n- Countries now build fortifications much more often. Previous limits that kept\n  them from building were removed or relaxed.\n- Countries also build in peacetime (less often, lighter and in smaller amounts).\n- Fortifications are built along borders, not in cities. Cities are fortified\n  rarely, the capital a bit more often.\n- Smarter plans: a line of fortifications along the border (sometimes with a\n  second row), a group of tiles, or a few separate spots. The start is chosen\n  where more enemy tiles touch the border and nothing is built yet.\n- Mostly weak fortifications; with a small chance a few strong ones (levels 5-7).\n- A country never fortifies its whole border and always keeps part of its gold.\n- New slider \"How often countries build\" (Treasury tab): from rarely to very often.\n- The first AI plans are written to the BepInEx log for easy checking.\n\nWEAR FROM ATTACKS\n- New switch (off by default): every attack slightly damages the fortification\n  it hits. The higher the level, the slower it wears out.\n- A damaged fortification holds worse; when it breaks completely it loses one level.\n- Damaged fortifications can be repaired with the brush for part of the price.\n  With wear on, countries repair badly damaged fortifications first.\n- New slider \"Damage speed\". The condition of fortifications is saved with the game\n  and shown in the tooltip.\n\nMAP LOOK\n- Fortifications are drawn as smooth zones instead of square pixels:\n  soft glow, dark edge, translucent fill with hatching, a bright wall-like outline,\n  nested rings on strong levels and small towers along the edge.\n- Drawing runs on a background thread and does not slow the game down."
         }
       ]
+    },
+    {
+      "id": "that-region",
+      "name": "That Region",
+      "version": "1.0.5",
+      "author": "Guy",
+      "summary": "mod that allows you to attack a specific region by circling it",
+      "description": "",
+      "instructions": "Already built into the menu",
+      "download_url": "https://raw.githubusercontent.com/omarxi/solanin/main/mods/ThatRegion.dll",
+      "icon_url": null,
+      "previews": [
+        "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/tharegion.png",
+        "https://raw.githubusercontent.com/omarxi/solanin/main/mods/images/tharegion2.png"
+      ],
+      "image_url": null,
+      "video_url": null,
+      "sha256": null,
+      "install_target": "bepinex_plugins",
+      "tags": [],
+      "updated_at": "2026-11-20",
+      "changelog": []
     }
   ],
   "supabase_url": "https://uwuajzanitbpfocyhhcu.supabase.co",
