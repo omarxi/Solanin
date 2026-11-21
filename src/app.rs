@@ -1360,18 +1360,22 @@ impl ModLauncherApp {
                                 ui.with_layout(
                                     egui::Layout::right_to_left(egui::Align::Center),
                                     |ui| {
+                                        let is_official = catalog_entry
+                                            .as_ref()
+                                            .is_some_and(|m| !m.user_submitted);
                                         ui.menu_button(RichText::new("...").strong(), |ui| {
                                             ui.set_min_width(150.0);
                                             if ui.button("Check Folder").clicked() {
                                                 let _ = open::that(&inst.staging_dir);
                                                 ui.close_menu();
                                             }
-                                            if ui
-                                                .add_enabled(
-                                                    !self.busy,
-                                                    egui::Button::new("Switch to Official"),
-                                                )
-                                                .clicked()
+                                            if !is_official
+                                                && ui
+                                                    .add_enabled(
+                                                        !self.busy,
+                                                        egui::Button::new("Switch to Official"),
+                                                    )
+                                                    .clicked()
                                             {
                                                 self.switch_library_for =
                                                     Some((id.clone(), inst.name.clone()));
