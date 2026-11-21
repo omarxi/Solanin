@@ -93,6 +93,9 @@ pub struct ModLauncherApp {
     update_confirm_open: bool,
     post_update_notes: Option<(String, String)>,
     warning_mod: Option<ModEntry>,
+    confirm_uninstall: Option<(String, String)>,
+    switch_library_for: Option<(String, String)>,
+    switch_library_search: String,
 }
 
 fn apply_theme(ctx: &egui::Context) {
@@ -211,6 +214,9 @@ impl ModLauncherApp {
             update_confirm_open: false,
             post_update_notes,
             warning_mod: None,
+            confirm_uninstall: None,
+            switch_library_for: None,
+            switch_library_search: String::new(),
         };
 
         if import_untracked_plugins(&app.paths, &mut app.state, &app.catalog) > 0 {
@@ -1301,22 +1307,41 @@ impl ModLauncherApp {
                         let Some(inst) = self.state.installed.get(&id).cloned() else {
                             continue;
                         };
+                        let catalog_entry =
+                            self.catalog.mods.iter().find(|m| m.id == inst.id).cloned();
+                        let update_entry = catalog_entry
+                            .as_ref()
+                            .filter(|m| m.version != inst.version)
+                            .cloned();
                         card_frame(false).show(ui, |ui| {
                             ui.set_width(ui.available_width());
                             ui.horizontal(|ui| {
                                 ui.vertical(|ui| {
-                                    ui.label(
-                                        RichText::new(format!("{}  v{}", inst.name, inst.version))
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            RichText::new(format!(
+                                                "{}  v{}",
+                                                inst.name, inst.version
+                                            ))
                                             .size(15.0)
                                             .strong(),
-                                    );
+                                        );
+                                        if let Some(ref up) = update_entry {
+                                            ui.label(
+                                                RichText::new(format!(
+                                                    "·  Update available (v{})",
+                                                    up.version
+                                                ))
+                                                .small()
+                                                .strong()
+                                                .color(ACCENT_AMBER),
+                                            );
+                                        }
+                                    });
                                     let count = inst.deployed_files.len();
                                     let file_word = if count == 1 { "file" } else { "files" };
-                                    let instr = self
-                                        .catalog
-                                        .mods
-                                        .iter()
-                                        .find(|m| m.id == inst.id)
+                                    let instr = catalog_entry
+                                        .as_ref()
                                         .map(|m| m.instructions.trim().to_string())
                                         .filter(|s| !s.is_empty())
                                         .unwrap_or_else(|| inst.instructions.trim().to_string());
@@ -1335,20 +1360,57 @@ impl ModLauncherApp {
                                 ui.with_layout(
                                     egui::Layout::right_to_left(egui::Align::Center),
                                     |ui| {
-                                        if ui.add(primary_button("Uninstall", ACCENT_RED)).clicked()
-                                        {
-                                            self.handle_uninstall(&id);
-                                        }
-                                        if ui.button("Folder").clicked() {
-                                            let _ = open::that(&inst.staging_dir);
-                                        }
+                                        ui.menu_button(RichText::new("...").strong(), |ui| {
+                                            ui.set_min_width(150.0);
+                                            if ui.button("Check Folder").clicked() {
+                                                let _ = open::that(&inst.staging_dir);
+                                                ui.close_menu();
+                                            }
+                                            if ui
+                                                .add_enabled(
+                                                    !self.busy,
+                                                    egui::Button::new("Switch to Official"),
+                                                )
+                                                .clicked()
+                                            {
+                                                self.switch_library_for =
+                                                    Some((id.clone(), inst.name.clone()));
+                                                self.switch_library_search.clear();
+                                                ui.close_menu();
+                                            }
+                                            ui.separator();
+                                            if ui
+                                                .button(
+                                                    RichText::new("Uninstall").color(ACCENT_RED),
+                                                )
+                                                .clicked()
+                                            {
+                                                self.confirm_uninstall =
+                                                    Some((id.clone(), inst.name.clone()));
+                                                ui.close_menu();
+                                            }
+                                        });
                                         let (lbl, col) = if inst.enabled {
                                             ("Enabled", ACCENT_GREEN)
                                         } else {
-                                            ("Disabled", Color32::from_rgb(55, 62, 78))
+                                            ("Disabled", ACCENT_RED)
                                         };
                                         if ui.add(primary_button(lbl, col)).clicked() {
                                             self.toggle_mod_enabled(&id);
+                                        }
+                                        if let Some(up) = update_entry {
+                                            if ui
+                                                .add_enabled(
+                                                    !self.busy,
+                                                    primary_button(
+                                                        &format!("Update (v{})", up.version),
+                                                        ACCENT_AMBER,
+                                                    ),
+                                                )
+                                                .clicked()
+                                            {
+                                                self.trigger_install_mod(up, ctx.clone());
+                                            }
                                         }
                                         if let Some(cat_match) =
                                             find_catalog_match(&inst, &self.catalog).cloned()
@@ -1752,6 +1814,178 @@ impl eframe::App for ModLauncherApp {
             }
             if close {
                 self.warning_mod = None;
+            }
+        }
+
+        if let Some((uninstall_id, uninstall_name)) = self.confirm_uninstall.clone() {
+            let mut close = false;
+            let mut confirmed = false;
+            egui::Window::new("Confirm Uninstall")
+                .collapsible(false)
+                .resizable(false)
+                .frame(
+                    egui::Frame::window(&ctx.style())
+                        .fill(BG_PANEL)
+                        .stroke(Stroke::new(1.0_f32, ACCENT_RED))
+                        .rounding(Rounding::same(10.0))
+                        .inner_margin(egui::Margin::same(16.0)),
+                )
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.set_min_width(320.0);
+                    ui.label(
+                        RichText::new(format!(
+                            "Are you sure you want to uninstall \"{uninstall_name}\"?"
+                        ))
+                        .size(14.0)
+                        .strong(),
+                    );
+                    ui.add_space(6.0);
+                    ui.label(
+                        RichText::new(
+                            "This will remove the plugin from your game and staging folder.",
+                        )
+                        .small()
+                        .color(TEXT_MUTED),
+                    );
+                    ui.add_space(12.0);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.add(primary_button("Uninstall", ACCENT_RED)).clicked() {
+                            confirmed = true;
+                            close = true;
+                        }
+                        if ui.button("Cancel").clicked() {
+                            close = true;
+                        }
+                    });
+                });
+            if confirmed {
+                self.handle_uninstall(&uninstall_id);
+            }
+            if close {
+                self.confirm_uninstall = None;
+            }
+        }
+
+        if let Some((local_id, local_name)) = self.switch_library_for.clone() {
+            let mut close = false;
+            let mut chosen: Option<ModEntry> = None;
+            egui::Window::new(format!("Switch \"{local_name}\" to Official / Catalog"))
+                .collapsible(false)
+                .resizable(true)
+                .default_size([480.0, 420.0])
+                .frame(
+                    egui::Frame::window(&ctx.style())
+                        .fill(BG_PANEL)
+                        .stroke(Stroke::new(1.0_f32, ACCENT_BLUE))
+                        .rounding(Rounding::same(10.0))
+                        .inner_margin(egui::Margin::same(16.0)),
+                )
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.label(
+                        RichText::new(
+                            "Pick any mod from the library to replace this local plugin and receive updates:",
+                        )
+                        .small()
+                        .color(TEXT_MUTED),
+                    );
+                    ui.add_space(8.0);
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.switch_library_search)
+                            .hint_text("Search library mods...")
+                            .desired_width(f32::INFINITY),
+                    );
+                    ui.add_space(8.0);
+
+                    let q = self.switch_library_search.trim().to_lowercase();
+                    let mut choices: Vec<ModEntry> = self
+                        .catalog
+                        .mods
+                        .iter()
+                        .filter(|m| {
+                            q.is_empty()
+                                || m.name.to_lowercase().contains(&q)
+                                || m.author.to_lowercase().contains(&q)
+                                || m.id.to_lowercase().contains(&q)
+                        })
+                        .cloned()
+                        .collect();
+                    choices.sort_by_key(|m| m.user_submitted);
+
+                    egui::ScrollArea::vertical()
+                        .max_height(280.0)
+                        .show(ui, |ui| {
+                            if choices.is_empty() {
+                                ui.label(
+                                    RichText::new("No matching catalog mods found.")
+                                        .color(TEXT_MUTED),
+                                );
+                            }
+                            for m in choices {
+                                card_frame(false).show(ui, |ui| {
+                                    ui.set_width(ui.available_width());
+                                    ui.horizontal(|ui| {
+                                        ui.vertical(|ui| {
+                                            ui.horizontal(|ui| {
+                                                ui.label(RichText::new(&m.name).strong());
+                                                if m.user_submitted {
+                                                    ui.label(
+                                                        RichText::new("Community")
+                                                            .small()
+                                                            .color(ACCENT_AMBER),
+                                                    );
+                                                } else {
+                                                    ui.label(
+                                                        RichText::new("Official")
+                                                            .small()
+                                                            .color(ACCENT_BLUE),
+                                                    );
+                                                }
+                                            });
+                                            let meta = if m.author.is_empty() {
+                                                format!("v{}", m.version)
+                                            } else {
+                                                format!("v{}  ·  {}", m.version, m.author)
+                                            };
+                                            ui.label(
+                                                RichText::new(meta).small().color(TEXT_MUTED),
+                                            );
+                                        });
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                if ui
+                                                    .add_enabled(
+                                                        !self.busy,
+                                                        primary_button("Switch", ACCENT_BLUE),
+                                                    )
+                                                    .clicked()
+                                                {
+                                                    chosen = Some(m.clone());
+                                                    close = true;
+                                                }
+                                            },
+                                        );
+                                    });
+                                });
+                                ui.add_space(4.0);
+                            }
+                        });
+
+                    ui.add_space(10.0);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("Cancel").clicked() {
+                            close = true;
+                        }
+                    });
+                });
+            if let Some(m) = chosen {
+                self.handle_uninstall(&local_id);
+                self.trigger_install_mod(m, ctx.clone());
+            }
+            if close {
+                self.switch_library_for = None;
             }
         }
 
