@@ -5,7 +5,7 @@
 <h1 align="center">Solanin</h1>
 
 <p align="center">
-  A lightweight, cross-platform plugin launcher for <strong>Ages of Conflict: World War Simulator</strong>, built in Rust (Linux AppImage &amp; Windows <code>.exe</code>).
+  A lightweight, cross-platform plugin launcher for <strong>Ages of Conflict: World War Simulator</strong>, built in Rust (Linux AppImage, Windows <code>.exe</code> &amp; macOS <code>.app</code> — Experimental).
 </p>
 
 <p align="center">
@@ -23,15 +23,15 @@
 ![Installed Plugins](assets/preview-installed.webp)
 
 ## Features
-- **Automatic BepInEx 5 Setup**: Checks for `BepInEx` on startup and automatically installs the right build for Windows or Linux (`5.4.23.6`) into your Steam game folder.
+- **Automatic BepInEx 5 Setup**: Checks for `BepInEx` on startup and automatically installs the right build for Windows, Linux, or macOS (`5.4.23.6`) into your Steam game folder.
 - **Steam Auto-Detection**: Reads Steam's `libraryfolders.vdf` and `appmanifest_2186320.acf` to locate *Ages of Conflict World War Simulator* automatically.
 - **Browse & Install Plugins**: Fetches `catalog.json` (with offline caching), previews plugin images and descriptions, and installs `.zip` or `.dll` plugins into `BepInEx/plugins`.
 - **Enable / Disable Anytime**: Toggling a plugin off removes its files from `BepInEx/plugins` while keeping them staged locally for instant re-enabling.
 
 ## Download
-Visit the **[Solanin Website](https://omarxi.github.io/Solanin/)** or grab the latest **`solanin-setup.exe`** / **`solanin-portable.exe`** (Windows), **`solanin-x86_64.AppImage`** (Linux), or **`Solanin-macos.zip`** (macOS, Apple Silicon & Intel) from [Releases](https://github.com/omarxi/Solanin/releases).
+Visit the **[Solanin Website](https://omarxi.github.io/Solanin/)** or grab the latest **`solanin-setup.exe`** / **`solanin-portable.exe`** (Windows), **`solanin-x86_64.AppImage`** (Linux), or **`Solanin-macos.zip`** (macOS, Apple Silicon & Intel — **Experimental**) from [Releases](https://github.com/omarxi/Solanin/releases).
 
-> **macOS note:** Solanin isn't notarized by Apple, so the first time you open it, right-click `Solanin.app` → **Open** (or run `xattr -cr Solanin.app`). Launch the game with Solanin's **Play** button, or set the game's Steam Launch Options to `"./run_bepinex.sh" %command%` so BepInEx loads.
+> **macOS note (Experimental):** The macOS version is still experimental. Solanin isn't notarized by Apple, so the first time you open it, right-click `Solanin.app` → **Open** (or run `xattr -cr Solanin.app`). Launch the game with Solanin's **Play** button, or set the game's Steam Launch Options to `"./run_bepinex.sh" %command%` so BepInEx loads.
 
 ## Building from Source
 Requires [Rust](https://rustup.rs/):
