@@ -29,7 +29,9 @@
 - **Enable / Disable Anytime**: Toggling a plugin off removes its files from `BepInEx/plugins` while keeping them staged locally for instant re-enabling.
 
 ## Download
-Visit the **[Solanin Website](https://omarxi.github.io/Solanin/)** or grab the latest **`solanin-setup.exe`** / **`solanin-portable.exe`** (Windows) or **`solanin-x86_64.AppImage`** (Linux) from [Releases](https://github.com/omarxi/Solanin/releases).
+Visit the **[Solanin Website](https://omarxi.github.io/Solanin/)** or grab the latest **`solanin-setup.exe`** / **`solanin-portable.exe`** (Windows), **`solanin-x86_64.AppImage`** (Linux), or **`Solanin-macos.zip`** (macOS, Apple Silicon & Intel) from [Releases](https://github.com/omarxi/Solanin/releases).
+
+> **macOS note:** Solanin isn't notarized by Apple, so the first time you open it, right-click `Solanin.app` → **Open** (or run `xattr -cr Solanin.app`). Launch the game with Solanin's **Play** button, or set the game's Steam Launch Options to `"./run_bepinex.sh" %command%` so BepInEx loads.
 
 ## Building from Source
 Requires [Rust](https://rustup.rs/):
@@ -48,4 +50,11 @@ Requires `mingw-w64` (`x86_64-w64-mingw32-gcc`):
 ```bash
 chmod +x scripts/build-windows.sh
 ./scripts/build-windows.sh
+```
+
+### macOS `.app` (on a Mac)
+Requires Xcode Command Line Tools (`xcode-select --install`):
+```bash
+bash scripts/build-macos.sh          # Universal (Apple Silicon + Intel)
+bash scripts/build-macos.sh --arm64  # Apple Silicon only
 ```

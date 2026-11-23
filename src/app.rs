@@ -481,7 +481,14 @@ impl ModLauncherApp {
                     self.bepinex_installing = false;
                     match result {
                         Ok(()) => {
-                            self.status_message = "BepInEx installed and ready".to_string();
+                            #[cfg(target_os = "macos")]
+                            {
+                                self.status_message = "BepInEx installed! Launch with Solanin's Play button, or set Steam Launch Options to: \"./run_bepinex.sh\" %command%".to_string();
+                            }
+                            #[cfg(not(target_os = "macos"))]
+                            {
+                                self.status_message = "BepInEx installed and ready".to_string();
+                            }
                         }
                         Err(err) => {
                             self.status_message = format!("BepInEx install failed: {err}");

@@ -98,6 +98,12 @@ pub fn detect_game_dir() -> Option<PathBuf> {
         steam_roots.push(home.join(".var/app/com.valvesoftware.Steam/.local/share/Steam"));
     }
 
+    #[cfg(target_os = "macos")]
+    if let Some(base) = BaseDirs::new() {
+        let home = base.home_dir();
+        steam_roots.push(home.join("Library/Application Support/Steam"));
+    }
+
     let mut libraries = Vec::new();
     for root in steam_roots {
         if !root.exists() {

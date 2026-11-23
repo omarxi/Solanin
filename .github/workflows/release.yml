@@ -49,9 +49,24 @@ jobs:
             target/release/solanin-portable.exe
             target/installer/solanin-setup.exe
 
+  build-macos-app:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build Universal macOS App
+        run: bash scripts/build-macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: target/Solanin-macos.zip
+
   create-release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build-linux-appimage, build-windows-exe]
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') && !cancelled() &&
+      needs.build-linux-appimage.result == 'success' &&
+      needs.build-windows-exe.result == 'success'
+    needs: [build-linux-appimage, build-windows-exe, build-macos-app]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -64,4 +79,5 @@ jobs:
             dist/**/solanin-x86_64.AppImage
             dist/**/solanin-portable.exe
             dist/**/solanin-setup.exe
+            dist/**/Solanin-macos.zip
           generate_release_notes: true

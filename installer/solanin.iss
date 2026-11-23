@@ -1,6 +1,6 @@
 [Setup]
 AppName=Solanin
-AppVersion=1.1.1
+AppVersion=1.2.0
 AppPublisher=omarxi
 AppPublisherURL=https://github.com/omarxi/Solanin
 DefaultDirName={localappdata}\Programs\Solanin

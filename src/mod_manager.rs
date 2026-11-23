@@ -229,6 +229,8 @@ pub fn disable_mod(installed: &mut InstalledMod) -> Result<(), String> {
 
 const BEPINEX_LINUX_URL: &str =
     "https://github.com/BepInEx/BepInEx/releases/download/v5.4.23.6/BepInEx_linux_x64_5.4.23.6.zip";
+const BEPINEX_MACOS_URL: &str =
+    "https://github.com/BepInEx/BepInEx/releases/download/v5.4.23.6/BepInEx_macos_universal_5.4.23.6.zip";
 const BEPINEX_WIN_URL: &str =
     "https://github.com/BepInEx/BepInEx/releases/download/v5.4.23.6/BepInEx_win_x64_5.4.23.6.zip";
 
@@ -246,8 +248,24 @@ pub fn install_bepinex(game_dir: &Path) -> Result<(), String> {
     }
 
     let is_linux_native = game_dir.join("Ages of Conflict.x86_64").exists();
+    let macos_app_name = if cfg!(target_os = "macos") {
+        std::fs::read_dir(game_dir)
+            .ok()
+            .and_then(|entries| {
+                entries
+                    .flatten()
+                    .map(|e| e.path())
+                    .find(|p| p.is_dir() && p.extension().and_then(|s| s.to_str()) == Some("app"))
+                    .and_then(|p| p.file_name().and_then(|s| s.to_str()).map(str::to_string))
+            })
+    } else {
+        None
+    };
+
     let url = if is_linux_native {
         BEPINEX_LINUX_URL
+    } else if macos_app_name.is_some() || cfg!(target_os = "macos") {
+        BEPINEX_MACOS_URL
     } else {
         BEPINEX_WIN_URL
     };
@@ -273,13 +291,18 @@ pub fn install_bepinex(game_dir: &Path) -> Result<(), String> {
         let _ = std::fs::write(&bepinex_cfg, "[Chainloader]\nHideManagerGameObject = true\n");
     }
 
-    if is_linux_native {
+    let unix_exec = if is_linux_native {
+        Some("Ages of Conflict.x86_64".to_string())
+    } else {
+        macos_app_name
+    };
+    if let Some(exec_name) = unix_exec {
         let run_sh = game_dir.join("run_bepinex.sh");
         if run_sh.exists() {
             if let Ok(content) = std::fs::read_to_string(&run_sh) {
                 let updated = content.replace(
                     "executable_name=\"\"",
-                    "executable_name=\"Ages of Conflict.x86_64\"",
+                    &format!("executable_name=\"{exec_name}\""),
                 );
                 let _ = std::fs::write(&run_sh, updated);
             }
