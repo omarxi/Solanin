@@ -264,7 +264,7 @@
     {
       "id": "that-region",
       "name": "That Region",
-      "version": "1.0.5",
+      "version": "1.1.0",
       "author": "Guy",
       "summary": "mod that allows you to attack a specific region by circling it",
       "description": "",
@@ -280,8 +280,14 @@
       "sha256": null,
       "install_target": "bepinex_plugins",
       "tags": [],
-      "updated_at": "2026-11-20",
-      "changelog": []
+      "updated_at": "2026-11-25",
+      "changelog": [
+        {
+          "version": "1.1.0",
+          "date": "2026-11-25",
+          "notes": "v1.1.0\n\n-annex button added\n-game now pauses while you draw the region, and continues once you're done\n-there's now settings (in display and the gear icon when you're in a game) to hide the region outlines or disable the region outline following the front as it moves\n-small performance improvements"
+        }
+      ]
     }
   ],
   "supabase_url": "https://uwuajzanitbpfocyhhcu.supabase.co",
