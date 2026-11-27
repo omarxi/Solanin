@@ -250,7 +250,7 @@
       "sha256": null,
       "install_target": "bepinex_plugins",
       "tags": [
-        "P to open the menu"
+        "V to open menu (can change from menu)"
       ],
       "updated_at": "2026-11-27",
       "changelog": [
