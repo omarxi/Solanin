@@ -235,7 +235,7 @@
     {
       "id": "Echos-Fortifications",
       "name": "Echo's Fortifications",
-      "version": "1.0.2",
+      "version": "1.0.4",
       "author": "Echo",
       "summary": "Fortifications 1.0.1 adds a full gold economy, monthly upkeep, AI fortification building, per-level balance presets, an Eraser tool, and a visual map/UI overhaul across 6 languages.",
       "description": "Fortifications 1.0.1 — Changelog\n\nEconomy:\n• Building now costs gold from the country's real treasury (1 gold at Level 1 up to 65 at Level 10); upgrading only charges the level difference.\n• New \"Charge gold for building\" toggle (enabled by default), plus a 25–400% price multiplier.\n• Operations (Brush, Border, Country) preview their cost in advance, build as many tiles as the treasury can afford, and refund gold on Undo.\n\nFortification Upkeep:\n• New monthly upkeep toggle (off by default)—costs scale with tile count and fortification levels.\n• If a country runs out of gold, part of its fortifications will degrade by one level.\n\nAI Builds Fortifications:\n• New AI toggle (off by default; requires gold charging enabled).\n• AI only builds during wars with neighbors (never in peacetime), keeps a treasury reserve, reacts with realistic delays, and mainly builds Level 1–4 forts (with a small chance for Level 5–7) rather than fortifying entire borders.\n\nBalance:\n• New Balance tab with individual breakthrough-chance sliders for every level, durability-per-level settings, and presets (Soft, Balanced, Hard, Impregnable).\n\nTools:\n• New Eraser tool to remove fortifications for the selected country, plus Erase buttons for Border and Country tools.\n• Brush, Border, and Country now only upgrade tiles up to the chosen level.\n\nVisuals & Panel:\n• Redesigned panel matching the game's dark navy & gold style with a treasury coin indicator and animated gold accent line.\n• Redrawn fortification map overlay with translucent hatched fills, glowing zone outlines, attack-repel tile flashes, cursor frame, pulsing brush ring, price tooltip, and a toggleable corner legend.\n• Five tabs: Build, Overview (with monthly upkeep & AI stats), Economy (treasury, income, toggles, price/upkeep table), Balance, and Options.\n• Translated into 6 languages: EN, RU, ES, DE, FR, and 中文.",
@@ -252,8 +252,13 @@
       "tags": [
         "P to open the menu"
       ],
-      "updated_at": "2026-11-19",
+      "updated_at": "2026-11-27",
       "changelog": [
+        {
+          "version": "1.0.4",
+          "date": "2026-11-27",
+          "notes": "FORTIFICATIONS 1.0.4 — CHANGELOG\n=================================\n\nNew Update 1.0.4 is here! More features and fixes! Read the description for changelog! The UI now opens to the letter “V”; you can change it in the settings. \n\nMENU\n- The menu is now built from the look of the game's own settings window: title bar,\ntab strip, section headers, slider and toggle rows, scroll bar and frame are copied\nfrom the game. If the game's window is not available, the simple built-in panel\nis used instead.\n- The menu opens small by default and its size can be changed with a slider.\n- The menu appears and disappears smoothly.\n- All menu text uses the game's own font, and the text is larger and easier to read.\n- Tabs share the width equally and the correct tab is highlighted; every tab can be\nclicked and switches the content in place.\n- Captions no longer run up over the tabs.\n- Rows keep the game's own layout, and text on dark backgrounds is light.\n\nMAP\n- Fortifications can be shown with a separate key (F1 by default) without opening the\nmenu. The key can be changed.\n- Level numbers are shown on the fortifications when the map is zoomed in\n(can be switched off).\n- Levels now differ in more than color: weak ones have a dashed wall, strong ones a\nthicker double-lined wall with battlements, tower shapes change with the level\n(round, square, hexagon, star), the fill pattern changes (stripes, crossed\nstripes, dots), and the top levels get a gold shine and a whiter glow."
+        },
         {
           "version": "1.0.2",
           "date": "2026-11-19",
